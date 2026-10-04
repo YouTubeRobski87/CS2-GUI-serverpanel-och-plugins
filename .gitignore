@@ -1,0 +1,16 @@
+# Byggt och beroenden
+node_modules/
+panel/build/
+panel/.svelte-kit/
+**/bin/
+**/obj/
+**/out/
+
+# Panelens lokala data (inställningar, GSLT-token, fönsterprofil, loggar)
+panel-data/
+*.log
+
+# Hemligheter som aldrig ska upp
+gslt.txt
+*.env
+server.cfg

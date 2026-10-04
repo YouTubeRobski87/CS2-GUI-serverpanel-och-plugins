@@ -1,0 +1,6 @@
+{
+  "instadefuse.prefix": "[[GOLD]Gamla Skolan[WHITE]] ",
+  "instadefuse.unsuccessful": "{0} var [DARK_RED]{1} sekunder[WHITE] från att desarmera bomben.",
+  "instadefuse.successful": "{0} desarmerade med [GREEN]{1} sekunder[WHITE] kvar på bomben.",
+  "instadefuse.not_possible": "Ingen snabbdesarmering – det finns en granat i luften!"
+}

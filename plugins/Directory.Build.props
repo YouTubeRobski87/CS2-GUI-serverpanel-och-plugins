@@ -1,0 +1,15 @@
+<Project>
+  <!-- Var CounterStrikeSharp-API:t ligger. Ändra här, eller bygg med: dotnet build -p:CssDir=... -->
+  <PropertyGroup>
+    <CssDir Condition="'$(CssDir)' == ''">C:\GameServers\CS2\game\csgo\addons\counterstrikesharp</CssDir>
+    <CssApiDir>$(CssDir)\api</CssApiDir>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="CounterStrikeSharp.API"><HintPath>$(CssApiDir)\CounterStrikeSharp.API.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Microsoft.Extensions.Logging.Abstractions"><HintPath>$(CssApiDir)\Microsoft.Extensions.Logging.Abstractions.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
