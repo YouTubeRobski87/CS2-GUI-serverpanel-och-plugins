@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <!-- Delat API från RetakesPlugin (B3none/cs2-retakes) -->
+    <Reference Include="RetakesPluginShared"><HintPath>$(CssDir)\shared\RetakesPluginShared\RetakesPluginShared.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
