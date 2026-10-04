@@ -9,16 +9,18 @@
 	import Settings from '$lib/components/Settings.svelte';
 	import Update from '$lib/components/Update.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import { t, i18n, setLang } from '$lib/i18n.svelte.js';
 
-	const tabs = [
-		{ id: 'overview', label: 'Översikt', icon: 'grid' },
-		{ id: 'console', label: 'Konsol', icon: 'terminal' },
-		{ id: 'players', label: 'Spelare', icon: 'users' },
-		{ id: 'leaderboard', label: 'Topplista', icon: 'trophy' },
+	let tabs = $derived([
+		{ id: 'overview', label: t('Översikt', 'Overview'), icon: 'grid' },
+		{ id: 'console', label: t('Konsol', 'Console'), icon: 'terminal' },
+		{ id: 'players', label: t('Spelare', 'Players'), icon: 'users' },
+		{ id: 'leaderboard', label: t('Topplista', 'Leaderboard'), icon: 'trophy' },
 		{ id: 'plugins', label: 'Plugins', icon: 'puzzle' },
-		{ id: 'settings', label: 'Inställningar', icon: 'sliders' },
-		{ id: 'update', label: 'Uppdatering', icon: 'download' }
-	];
+		{ id: 'settings', label: t('Inställningar', 'Settings'), icon: 'sliders' },
+		{ id: 'update', label: t('Uppdatering', 'Update'), icon: 'download' }
+	]);
+	const TAB_IDS = ['overview', 'console', 'players', 'leaderboard', 'plugins', 'settings', 'update'];
 
 	let tab = $state('overview');
 	let st = $state(null);
@@ -37,6 +39,7 @@
 	async function refreshState() {
 		try {
 			st = await api('state');
+			if (st.lang && st.lang !== i18n.lang) setLang(st.lang);
 			offline = false;
 		} catch {
 			offline = true;
@@ -64,7 +67,7 @@
 	onMount(() => {
 		try {
 			const saved = localStorage.getItem('gs-tab');
-			if (saved && tabs.some((t) => t.id === saved)) tab = saved;
+			if (saved && TAB_IDS.includes(saved)) tab = saved;
 		} catch {
 			/* */
 		}
@@ -89,9 +92,20 @@
 	let status = $derived(
 		!st ? 'loading' : st.busy === 'starting' ? 'starting' : st.busy === 'stopping' ? 'stopping' : st.busy === 'updating' ? 'updating' : st.running ? 'online' : 'offline'
 	);
-	const statusText = { loading: 'Ansluter…', starting: 'Startar…', stopping: 'Stoppar…', updating: 'Uppdaterar…', online: 'Online', offline: 'Offline' };
+	let statusText = $derived({ loading: t('Ansluter…', 'Connecting…'), starting: t('Startar…', 'Starting…'), stopping: t('Stoppar…', 'Stopping…'), updating: t('Uppdaterar…', 'Updating…'), online: 'Online', offline: 'Offline' });
+
+	async function switchLang(lang) {
+		setLang(lang);
+		try {
+			await api('settings', { lang });
+			toast(t('Språket är nu svenska – pluginen i spelet följer med.', 'Language is now English – the in-game plugins follow along.'));
+			refreshState();
+		} catch (e) {
+			toast(e.message, 'error');
+		}
+	}
 	let humans = $derived(live?.players?.filter((p) => !p.bot).length ?? 0);
-	let modeName = $derived(st?.modes?.find((m) => m.id === st?.mode)?.name ?? 'Okänt läge');
+	let modeName = $derived(st?.modes?.find((m) => m.id === st?.mode)?.name ?? t('Okänt läge', 'Unknown mode'));
 
 	const ctx = {
 		toast,
@@ -112,7 +126,7 @@
 				</div>
 				<div>
 					<div class="font-display font-extrabold tracking-wide text-[15px] leading-tight">GAMLA SKOLAN</div>
-					<div class="label !text-[10px] !tracking-[0.2em]">CS2 Serverpanel</div>
+					<div class="label !text-[10px] !tracking-[0.2em]">{t('CS2 Serverpanel', 'CS2 Server Panel')}</div>
 				</div>
 			</div>
 		</div>
@@ -138,7 +152,12 @@
 		<div class="p-4 border-t border-line text-xs text-dim space-y-1">
 			<div>Patch <span class="num text-muted">{st?.version?.patch ?? '–'}</span></div>
 			<div class="flex items-center gap-2">
-				<span class="size-1.5 rounded-full {st?.mariadb ? 'bg-ok' : 'bg-dim'}"></span> MariaDB {st?.mariadb ? 'igång' : 'av'}
+				<span class="size-1.5 rounded-full {st?.mariadb ? 'bg-ok' : 'bg-dim'}"></span> MariaDB {st?.mariadb ? t('igång', 'running') : t('av', 'off')}
+			</div>
+			<div class="flex items-center gap-1 pt-2" role="group" aria-label="Language">
+				{#each [['en', 'English'], ['sv', 'Svenska']] as [code, name]}
+					<button class="px-2 py-1 rounded-md border text-[11px] {i18n.lang === code ? 'border-amber/50 text-amber-2 bg-amber/10' : 'border-line text-muted hover:text-text'}" onclick={() => switchLang(code)}>{name}</button>
+				{/each}
 			</div>
 		</div>
 	</aside>
@@ -152,7 +171,7 @@
 				></span>
 				<span class="font-display font-bold tracking-wide">{statusText[status]}</span>
 				{#if st?.running}
-					<span class="text-muted text-sm">· {modeName} · <span class="mono">{live?.map ?? '…'}</span> · {humans} spelare · upp {fmtDuration(Date.now() - new Date(st.startedAt).getTime())}</span>
+					<span class="text-muted text-sm">· {modeName} · <span class="mono">{live?.map ?? '…'}</span> · {humans} {t('spelare', 'players')} · {t('upp', 'up')} {fmtDuration(Date.now() - new Date(st.startedAt).getTime())}</span>
 				{/if}
 			</div>
 			<!-- mobilmeny -->
@@ -161,18 +180,28 @@
 			</select>
 			{#if update?.upToDate === false}
 				<button class="ml-auto hidden md:inline-flex btn btn-sm !border-warn/60 !text-warn" onclick={() => go('update')}>
-					<Icon name="download" class="size-4" /> Ny CS2-patch finns
+					<Icon name="download" class="size-4" /> {t('Ny CS2-patch finns', 'New CS2 patch available')}
 				</button>
 			{/if}
 		</header>
 
 		{#if offline}
-			<div class="mx-4 md:mx-8 mt-4 card !border-bad/50 p-4 text-sm text-bad">Tappade kontakten med panelen. Körs fönstret "Gamla Skolan Panel" fortfarande?</div>
+			<div class="mx-4 md:mx-8 mt-4 card !border-bad/50 p-4 text-sm text-bad">{t('Tappade kontakten med panelen. Körs den fortfarande (ikonen vid klockan)?', 'Lost contact with the panel. Is it still running (the icon by the clock)?')}</div>
+		{/if}
+		{#if st?.setup && !st.setup.ok && tab !== 'settings'}
+			<button class="mx-4 md:mx-8 mt-4 card !border-warn/50 p-4 text-sm text-left flex items-start gap-3 w-[calc(100%-2rem)] md:w-[calc(100%-4rem)] max-w-[1400px] hover:!border-warn" onclick={() => go('settings')}>
+				<Icon name="alert" class="size-5 text-warn shrink-0 mt-0.5" />
+				<span>
+					<span class="font-semibold text-warn">{t('Några saker behövs innan servern kan starta', 'A few things are needed before the server can start')}:</span>
+					<span class="text-muted">{st.setup.items.filter((i) => !i.ok && !i.optional).map((i) => i.label).join(' · ')}</span>
+					<span class="block text-xs text-dim mt-1">{t('Klicka för att öppna Inställningar → Kom igång.', 'Click to open Settings → Getting started.')}</span>
+				</span>
+			</button>
 		{/if}
 
 		<div class="p-4 md:p-8 max-w-[1400px]">
 			{#if !st}
-				<div class="text-muted">Laddar…</div>
+				<div class="text-muted">{t('Laddar…', 'Loading…')}</div>
 			{:else if tab === 'overview'}
 				<Overview {st} {live} {update} {ctx} />
 			{:else if tab === 'console'}

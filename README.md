@@ -4,6 +4,9 @@ Allt som driver Gamla Skolans egen Counter-Strike 2-server: en serverpanel som k
 program på Windows, och ett gäng egna CounterStrikeSharp-plugins för tre spellägen –
 **Classic Deathmatch**, **Retakes** och **1v1 Arenas** – som spelarna kan rösta mellan i spelet.
 
+> **⬇ [Ladda ner senaste versionen](https://github.com/YouTubeRobski87/CS2-GUI-serverpanel-och-plugins/releases/latest)** ·
+> **[Kom igång (svenska)](docs/KOM-IGANG.md)** · **[Getting started (English)](docs/GETTING-STARTED.md)**
+
 ![Översikt](docs/bilder/oversikt-dator.png)
 
 > Bilderna är tagna med testdata, inte från den riktiga servern.
@@ -12,16 +15,21 @@ program på Windows, och ett gäng egna CounterStrikeSharp-plugins för tre spel
 
 A Windows GUI control panel and a set of CounterStrikeSharp plugins for a CS2 community
 server running three game modes – **Deathmatch**, **Retakes** and **1v1 Arenas**.
+The panel and the in-game messages are available in **English and Swedish**.
+
+**→ [Download the latest release](https://github.com/YouTubeRobski87/CS2-GUI-serverpanel-och-plugins/releases/latest) and follow the [Getting started guide](docs/GETTING-STARTED.md).**
 
 - **Panel** (SvelteKit + Node, runs as a desktop app with a tray icon): start/stop the
   server, switch modes, live players and stats, kick/slay/team/ban, map change, plugin
   management, chat tips editor and one-click CS2 updates via SteamCMD.
 - **No RCON**: the panel talks to the server through a small file bridge plugin
   (`status.json` + command/result files), because CS2 RCON is unreliable and stalls the server.
-- **In-game mode vote** (`!lage`): players vote for another mode and the panel restarts
+- **In-game mode vote** (`!mode`): players vote for another mode and the panel restarts
   the server in it.
-- **Retakes extras**: weapon menu (`!vapen`) navigated with W/S/E, instadefuse, clutch
+- **Retakes extras**: weapon menu (`!guns`) navigated with W/S/E, instadefuse, clutch
   announcements.
+- **Setup check, GSLT token, server name, chat tag and editable game modes** – all from the
+  Settings page, no config files to hand-edit.
 
 The rest of this README is in Swedish – the [architecture diagram](#hur-det-hänger-ihop)
 and the tables should be readable either way. Licensed under MIT.
@@ -223,19 +231,18 @@ Används men ingår inte i repot (egna licenser). Byggs mot samma CounterStrikeS
 
 ## Installation
 
-Förutsätter en fungerande CS2-server med Metamod och CounterStrikeSharp, och
-[Node.js](https://nodejs.org) på datorn.
+Steg för steg finns i **[Kom igång](docs/KOM-IGANG.md)** ([English](docs/GETTING-STARTED.md)).
+Kort: installera CS2-servern, Metamod och CounterStrikeSharp, packa upp release-zippen
+(`ServerFiles` till servern, `Panel` var du vill), starta `Gamla Skolan Panel.vbs` och fyll i
+**Inställningar → Kom igång** (servermapp och GSLT-token).
 
-1. **Panelen** – bygg den (se nedan) och kopiera `panel/build`, `panel/package.json` och
-   allt i `launcher/` till `C:\GameServers\GamlaSkolanPanel\`.
-2. Starta `Gamla Skolan Panel.vbs` (eller `Starta panelen.bat`) en gång. Panelen skapar
-   `panel-data\settings.json` och genvägar på skrivbordet och i Start-menyn.
-3. **Plugins** – bygg dem och lägg varje `.dll` i
-   `counterstrikesharp\plugins\<PluginNamn>\<PluginNamn>.dll`.
-4. **Configfiler** – kopiera `server-config\cs2-retakes\retakes.cfg` till
-   `game\csgo\cfg\cs2-retakes\`, och `server-config\lang\<Plugin>\sv.json` till
-   pluginets `lang\`-mapp (som både `sv.json` och `en.json` för svenska som standard).
-5. Kontrollera sökvägarna under **Inställningar** i panelen.
+Release-zippen innehåller:
+
+| Mapp | Innehåll |
+|---|---|
+| `Panel/` | färdigbyggd panel (`build/`), startprogrammet och ikonen |
+| `ServerFiles/game/csgo/addons/counterstrikesharp/plugins/` | alla egna plugins, färdigbyggda |
+| `Optional/` | `retakes.cfg` med bottar och svenska språkfiler till Retakes-pluginen |
 
 ---
 
@@ -274,8 +281,8 @@ GSP_DEMO=1 GSP_ROOT=/sökväg/till/testmapp GSP_DATA=./panel-data node build
 
 Inga lösenord eller tokens finns i repot.
 
-- **GSLT-token** läses vid start ur `panel-data\gslt.txt` (panelen skapar den själv från
-  en äldre startfil första gången). Filen ligger utanför repot.
+- **GSLT-token** läggs in under **Inställningar → Kom igång** och sparas i
+  `panel-data\gslt.txt` på den egna datorn (visas maskerad i panelen). Filen ligger utanför repot.
 - **`rcon_password`** läses ur serverns `server.cfg` om RCON-reserven används.
 - `panel-data/`, `build/` och `node_modules/` är undantagna i `.gitignore`.
 
@@ -290,7 +297,7 @@ Inga lösenord eller tokens finns i repot.
 | Klienten är inaktuell | Fliken **Uppdatering** → Uppdatera |
 | Plugin syns två gånger i Plugins-fliken | En gammal version ligger kvar i minnet efter omladdning – försvinner vid nästa serveromstart |
 | Genvägen gör inget | Kör `Gamla Skolan Panel.vbs` en gång, då skapar programmet nya genvägar. Se `panel-data\tray.log` |
-| Timeout när någon ansluter | Oftast på spelarens sida (krasch/avbruten laddning). Om ingen kan ansluta: kolla port 27016 i router/brandvägg |
+| Timeout när någon ansluter | Oftast på spelarens sida (krasch/avbruten laddning). Om ingen kan ansluta: kolla serverns port (standard 27015) i router/brandvägg |
 
 ---
 

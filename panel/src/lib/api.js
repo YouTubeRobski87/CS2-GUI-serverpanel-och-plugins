@@ -1,11 +1,13 @@
+import { t } from './i18n.svelte.js';
+
 export async function api(path, body) {
 	const res = await fetch(`/api/${path}`, body === undefined ? undefined : {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(body)
 	});
-	const data = await res.json().catch(() => ({ ok: false, error: 'Ogiltigt svar' }));
-	if (!res.ok || data?.ok === false) throw new Error(data?.error || `Fel ${res.status}`);
+	const data = await res.json().catch(() => ({ ok: false, error: t('Ogiltigt svar', 'Invalid response') }));
+	if (!res.ok || data?.ok === false) throw new Error(data?.error || t(`Fel ${res.status}`, `Error ${res.status}`));
 	return data;
 }
 

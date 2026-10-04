@@ -19,7 +19,9 @@ public class VapenConfig : BasePluginConfig
     [JsonPropertyName("PistolRounds")] public int PistolRounds { get; set; } = 3;
     [JsonPropertyName("AwpPerTeam")] public int AwpPerTeam { get; set; } = 1;
     [JsonPropertyName("BotsCanGetAwp")] public bool BotsCanGetAwp { get; set; } = true;
-    [JsonPropertyName("Prefix")] public string Prefix { get; set; } = "{gold}[Gamla Skolan]{default}";
+    [JsonPropertyName("Prefix")] public string Prefix { get; set; } = "{gold}[Server]{default}";
+    // "en" eller "sv"
+    [JsonPropertyName("Language")] public string Language { get; set; } = "en";
 }
 
 public class Prefs
@@ -36,9 +38,9 @@ public class Prefs
 public class GamlaSkolanVapenPlugin : BasePlugin, IPluginConfig<VapenConfig>
 {
     public override string ModuleName => "Gamla Skolan Vapenval";
-    public override string ModuleVersion => "1.2.0";
+    public override string ModuleVersion => "1.3.0";
     public override string ModuleAuthor => "Gamla Skolan";
-    public override string ModuleDescription => "Vapenval för Retakes: !vapen";
+    public override string ModuleDescription => "Weapon menu for Retakes: !guns / !vapen";
 
     public VapenConfig Config { get; set; } = new();
     public void OnConfigParsed(VapenConfig config) => Config = config;
@@ -106,6 +108,9 @@ public class GamlaSkolanVapenPlugin : BasePlugin, IPluginConfig<VapenConfig>
         .Replace("{lightred}", $"{ChatColors.LightRed}").Replace("{blue}", $"{ChatColors.Blue}");
 
     private string P => Color(Config.Prefix);
+    private bool Sv => string.Equals(Config.Language, "sv", StringComparison.OrdinalIgnoreCase);
+    private string T(string sv, string en) => Sv ? sv : en;
+    private string WName((string id, string name) w) => w.id == "standard" ? T("Lagets standardpistol", "Team default pistol") : w.name;
 
     private Prefs PrefsFor(CCSPlayerController p)
     {
@@ -171,9 +176,10 @@ public class GamlaSkolanVapenPlugin : BasePlugin, IPluginConfig<VapenConfig>
         }
 
         if (pistol)
-            Server.PrintToChatAll($" {P} {ChatColors.Green}Pistolrunda{ChatColors.Default} ({played + 1}/{Config.PistolRounds}) – skriv {ChatColors.Gold}!vapen{ChatColors.Default} för att välja vapen.");
+            Server.PrintToChatAll(T($" {P} {ChatColors.Green}Pistolrunda{ChatColors.Default} ({played + 1}/{Config.PistolRounds}) – skriv {ChatColors.Gold}!vapen{ChatColors.Default} för att välja vapen.",
+                $" {P} {ChatColors.Green}Pistol round{ChatColors.Default} ({played + 1}/{Config.PistolRounds}) – type {ChatColors.Gold}!guns{ChatColors.Default} to pick your weapons."));
         else if (played == Config.PistolRounds)
-            Server.PrintToChatAll($" {P} {ChatColors.Green}Fullköp{ChatColors.Default} från och med nu – lycka till!");
+            Server.PrintToChatAll(T($" {P} {ChatColors.Green}Fullköp{ChatColors.Default} från och med nu – lycka till!", $" {P} {ChatColors.Green}Full buy{ChatColors.Default} from now on – good luck!"));
     }
 
     private void Give(CCSPlayerController p, bool pistol, bool awp)
@@ -215,9 +221,9 @@ public class GamlaSkolanVapenPlugin : BasePlugin, IPluginConfig<VapenConfig>
 
     // ------------------------------------------------------------------ meny
 
-    [ConsoleCommand("css_vapen", "Välj vapen för retakes")]
-    [ConsoleCommand("css_guns", "Välj vapen för retakes")]
-    [ConsoleCommand("css_gun", "Välj vapen för retakes")]
+    [ConsoleCommand("css_vapen", "Weapon menu for retakes")]
+    [ConsoleCommand("css_guns", "Weapon menu for retakes")]
+    [ConsoleCommand("css_gun", "Weapon menu for retakes")]
     [CommandHelper(whoCanExecute: CommandUsage.CLIENT_ONLY)]
     public void OnVapen(CCSPlayerController? player, CommandInfo cmd)
     {
@@ -299,8 +305,8 @@ public class GamlaSkolanVapenPlugin : BasePlugin, IPluginConfig<VapenConfig>
             else sb.Append($"<font color='#ffffff'>{Esc(m.Items[i].text)}</font><br>");
         }
         sb.Append(m.Back != null
-            ? "<font color='#9b917f' class='fontSize-s'>W/S: bläddra · E: välj · A: tillbaka · R: stäng</font>"
-            : "<font color='#9b917f' class='fontSize-s'>W/S: bläddra · E: välj · R: stäng</font>");
+            ? $"<font color='#9b917f' class='fontSize-s'>{T("W/S: bläddra · E: välj · A: tillbaka · R: stäng", "W/S: browse · E: select · A: back · R: close")}</font>"
+            : $"<font color='#9b917f' class='fontSize-s'>{T("W/S: bläddra · E: välj · R: stäng", "W/S: browse · E: select · R: close")}</font>");
         p.PrintToCenterHtml(sb.ToString());
     }
 
@@ -309,22 +315,25 @@ public class GamlaSkolanVapenPlugin : BasePlugin, IPluginConfig<VapenConfig>
         var pr = Mine(player);
         var items = new List<(string, Action<CCSPlayerController>)>
         {
-            ($"T-gevär: {NameOf(TRifles, pr.T)}", p => Pick(p, 0, "T-gevär", TRifles, pr.T, id => { Mine(p).T = id; RifleChosen(p); })),
-            ($"CT-gevär: {NameOf(CTRifles, pr.CT)}", p => Pick(p, 1, "CT-gevär", CTRifles, pr.CT, id => { Mine(p).CT = id; RifleChosen(p); })),
-            ($"AWP: {(pr.Awp ? "Ja (ersätter gevär)" : "Nej")}", p =>
+            ($"{T("T-gevär", "T rifle")}: {NameOf(TRifles, pr.T)}", p => Pick(p, 0, T("T-gevär", "T rifle"), TRifles, pr.T, id => { Mine(p).T = id; RifleChosen(p); })),
+            ($"{T("CT-gevär", "CT rifle")}: {NameOf(CTRifles, pr.CT)}", p => Pick(p, 1, T("CT-gevär", "CT rifle"), CTRifles, pr.CT, id => { Mine(p).CT = id; RifleChosen(p); })),
+            ($"AWP: {(pr.Awp ? T("Ja (ersätter gevär)", "Yes (replaces rifle)") : T("Nej", "No"))}", p =>
             {
                 var me = Mine(p);
                 me.Awp = !me.Awp;
                 Save();
-                p.PrintToChat($" {P} AWP är nu {(me.Awp ? $"{ChatColors.Green}på" : $"{ChatColors.Red}av")}{ChatColors.Default}. (En per lag och runda slumpas bland de som vill.)");
+                p.PrintToChat(T($" {P} AWP är nu {(me.Awp ? $"{ChatColors.Green}på" : $"{ChatColors.Red}av")}{ChatColors.Default}. (En per lag och runda slumpas bland de som vill.)",
+                                $" {P} AWP is now {(me.Awp ? $"{ChatColors.Green}on" : $"{ChatColors.Red}off")}{ChatColors.Default}. (One per team and round, picked at random among those who want it.)"));
                 OpenMain(p, 2);
             }),
-            ($"Sidovapen: {NameOf(Secondaries, pr.Secondary)}", p => Pick(p, 3, "Sidovapen (fullköp)", Secondaries, pr.Secondary, id => Mine(p).Secondary = id)),
-            ($"Pistolrunda T: {NameOf(TPistols, pr.PistolT)}", p => Pick(p, 4, "Pistolrunda T", TPistols, pr.PistolT, id => Mine(p).PistolT = id)),
-            ($"Pistolrunda CT: {NameOf(CTPistols, pr.PistolCT)}", p => Pick(p, 5, "Pistolrunda CT", CTPistols, pr.PistolCT, id => Mine(p).PistolCT = id)),
+            ($"{T("Sidovapen", "Secondary")}: {NameOfS(pr.Secondary)}", p => Pick(p, 3, T("Sidovapen (fullköp)", "Secondary (full buy)"), Secondaries, pr.Secondary, id => Mine(p).Secondary = id)),
+            ($"{T("Pistolrunda T", "Pistol round T")}: {NameOf(TPistols, pr.PistolT)}", p => Pick(p, 4, T("Pistolrunda T", "Pistol round T"), TPistols, pr.PistolT, id => Mine(p).PistolT = id)),
+            ($"{T("Pistolrunda CT", "Pistol round CT")}: {NameOf(CTPistols, pr.PistolCT)}", p => Pick(p, 5, T("Pistolrunda CT", "Pistol round CT"), CTPistols, pr.PistolCT, id => Mine(p).PistolCT = id)),
         };
-        ShowMenu(player, "Gamla Skolan – vapenval", items, null, sel);
+        ShowMenu(player, T("Vapenval", "Weapon menu"), items, null, sel);
     }
+
+    private string NameOfS(string id) => id == "standard" ? T("Lagets standardpistol", "Team default pistol") : NameOf(Secondaries, id);
 
     // Väljer man ett gevär vill man ha det – då stängs AWP av (annars vinner AWP varje runda).
     private void RifleChosen(CCSPlayerController p)
@@ -332,16 +341,17 @@ public class GamlaSkolanVapenPlugin : BasePlugin, IPluginConfig<VapenConfig>
         var me = Mine(p);
         if (!me.Awp) return;
         me.Awp = false;
-        p.PrintToChat($" {P} AWP är nu {ChatColors.Red}av{ChatColors.Default} eftersom du valde gevär. Slå på den igen i {ChatColors.Gold}!vapen{ChatColors.Default} om du vill ha AWP.");
+        p.PrintToChat(T($" {P} AWP är nu {ChatColors.Red}av{ChatColors.Default} eftersom du valde gevär. Slå på den igen i {ChatColors.Gold}!vapen{ChatColors.Default} om du vill ha AWP.",
+                        $" {P} AWP is now {ChatColors.Red}off{ChatColors.Default} because you picked a rifle. Turn it back on in {ChatColors.Gold}!guns{ChatColors.Default} if you want the AWP."));
     }
 
     private void Pick(CCSPlayerController player, int mainIndex, string title, (string id, string name)[] list, string current, Action<string> set)
     {
-        var items = list.Select(w => (w.name, (Action<CCSPlayerController>)(p =>
+        var items = list.Select(w => (WName(w), (Action<CCSPlayerController>)(p =>
         {
             set(w.id);
             Save();
-            p.PrintToChat($" {P} {title}: {ChatColors.Green}{w.name}{ChatColors.Default} – gäller från nästa runda.");
+            p.PrintToChat($" {P} {title}: {ChatColors.Green}{WName(w)}{ChatColors.Default} – {T("gäller från nästa runda.", "applies from next round.")}");
             OpenMain(p, mainIndex);
         }))).ToList();
         var sel = Math.Max(0, Array.FindIndex(list, w => w.id == current));

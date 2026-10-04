@@ -1,7 +1,7 @@
 // CS2-uppdateringar via SteamCMD + koll mot Steam om en ny patch finns.
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
-import { getSettings, paths } from './settings.js';
+import { getSettings, paths, L } from './settings.js';
 import { isRunning, probe, setBusy, repairMetamod } from './server.js';
 import { log } from './events.js';
 
@@ -42,7 +42,7 @@ export async function checkForUpdate(force = false) {
 			data.upToDate = !!j?.response?.up_to_date;
 			data.required = j?.response?.required_version ?? null;
 		} catch (e) {
-			data.error = 'Kunde inte fråga Steam: ' + e.message;
+			data.error = L('Kunde inte fråga Steam: ', 'Could not reach Steam: ') + e.message;
 		}
 	}
 	checkCache = { t: Date.now(), data };
@@ -56,18 +56,18 @@ export function getJob() {
 }
 
 export async function runUpdate({ validate = false } = {}) {
-	if (job.running) throw new Error('En uppdatering pågår redan.');
+	if (job.running) throw new Error(L('En uppdatering pågår redan.', 'An update is already running.'));
 	await probe();
-	if (isRunning()) throw new Error('Stoppa servern innan du uppdaterar.');
+	if (isRunning()) throw new Error(L('Stoppa servern innan du uppdaterar.', 'Stop the server before updating.'));
 	const s = getSettings();
-	if (!fs.existsSync(s.steamcmd)) throw new Error(`Hittar inte SteamCMD: ${s.steamcmd}`);
+	if (!fs.existsSync(s.steamcmd)) throw new Error(L(`Hittar inte SteamCMD: ${s.steamcmd}`, `Cannot find SteamCMD: ${s.steamcmd}`));
 	job.running = true;
 	job.lines = [];
 	job.startedAt = Date.now();
 	job.finishedAt = null;
 	job.ok = null;
 	setBusy('updating');
-	log('update', 'Startar uppdatering via SteamCMD…');
+	log('update', L('Startar uppdatering via SteamCMD…', 'Starting update via SteamCMD…'));
 	const args = ['+force_install_dir', s.serverRoot, '+login', 'anonymous', '+app_update', '730'];
 	if (validate) args.push('validate');
 	args.push('+quit');
@@ -90,8 +90,8 @@ export async function runUpdate({ validate = false } = {}) {
 		checkCache = null;
 		if (ok) {
 			repairMetamod();
-			log('ok', 'CS2-servern är uppdaterad');
-		} else log('error', 'Uppdateringen misslyckades – se SteamCMD-loggen');
+			log('ok', L('CS2-servern är uppdaterad', 'The CS2 server is up to date'));
+		} else log('error', L('Uppdateringen misslyckades – se SteamCMD-loggen', 'The update failed – see the SteamCMD log'));
 	});
 	p.on('error', (e) => {
 		job.lines.push('FEL: ' + e.message);

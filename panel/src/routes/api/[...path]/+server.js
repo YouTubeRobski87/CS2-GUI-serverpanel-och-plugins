@@ -5,10 +5,11 @@ import { bridgeAlive, exec, send } from '$lib/server/bridge.js';
 import { readConsole } from '$lib/server/logs.js';
 import { getEvents } from '$lib/server/events.js';
 import { checkForUpdate, getJob, runUpdate, installedVersion } from '$lib/server/update.js';
-import { getSettings, updateSettings, readGslt, readRconPassword, paths } from '$lib/server/settings.js';
+import { getSettings, updateSettings, readRconPassword, paths, saveGslt, maskedGslt, saveMode, deleteMode, resetMode, BUILTIN_MODES, L } from '$lib/server/settings.js';
 import {
 	liveStatus, playerAction, pluginList, pluginAction, rankings,
-	EDITABLE, readPluginConfig, writePluginConfig, mapCycle, changeMap
+	EDITABLE, titleOf, readPluginConfig, writePluginConfig, mapCycle, changeMap,
+	setChatPrefix, syncPluginLanguage, setupCheck
 } from '$lib/server/game.js';
 
 const fail = (e, status = 400) => json({ ok: false, error: e?.message || String(e) }, { status });
@@ -17,7 +18,7 @@ export async function GET({ params, url }) {
 	try {
 		switch (params.path) {
 			case 'state':
-				return json({ ok: true, ...getState(), bridge: bridgeAlive(), version: installedVersion() });
+				return json({ ok: true, ...getState(), bridge: bridgeAlive(), version: installedVersion(), lang: getSettings().lang, setup: setupCheck() });
 			case 'live':
 				return json(await liveStatus());
 			case 'console':
@@ -36,18 +37,24 @@ export async function GET({ params, url }) {
 				return json(mapCycle());
 			case 'config': {
 				const out = {};
-				for (const [name, d] of Object.entries(EDITABLE)) out[name] = { title: d.title, values: readPluginConfig(name) };
+				for (const name of Object.keys(EDITABLE)) out[name] = { title: titleOf(name), values: readPluginConfig(name) };
 				return json(out);
 			}
 			case 'settings': {
 				const s = getSettings();
 				return json({
-					serverRoot: s.serverRoot, steamcmd: s.steamcmd, mariadbBat: s.mariadbBat, port: s.port, defaultMode: s.defaultMode,
-					checks: { gslt: !!readGslt(), rcon: !!readRconPassword(), dataDir: paths().dataDir }
+					serverRoot: s.serverRoot, steamcmd: s.steamcmd, mariadbBat: s.mariadbBat, port: s.port, defaultMode: s.defaultMode, lang: s.lang,
+					gslt: maskedGslt(),
+					checks: { gslt: !!maskedGslt(), rcon: !!readRconPassword(), dataDir: paths().dataDir },
+					setup: setupCheck()
 				});
 			}
+			case 'modes': {
+				const s = getSettings();
+				return json({ modes: s.modes, builtin: BUILTIN_MODES });
+			}
 			default:
-				return fail('Okänd endpoint', 404);
+				return fail(L('Okänd endpoint', 'Unknown endpoint'), 404);
 		}
 	} catch (e) {
 		return fail(e, 500);
@@ -72,14 +79,14 @@ export async function POST({ params, request }) {
 				return json({ ok: true, changes: applyMode(body.mode) });
 			case 'rcon': {
 				const cmd = String(body.command || '').trim();
-				if (!cmd) return fail('Tomt kommando');
+				if (!cmd) return fail(L('Tomt kommando', 'Empty command'));
 				// Via bryggan om den är igång, annars RCON som reserv (kan få CS2 att hacka).
 				if (bridgeAlive()) return json({ ok: true, output: await exec(cmd), via: 'bridge' });
 				return json({ ok: true, output: await rcon(cmd, 5000), via: 'rcon' });
 			}
 			case 'say': {
 				const msg = String(body.message || '').replace(/["\r\n;]/g, '').slice(0, 200);
-				await send({ type: 'say', arg: msg });
+				await send({ type: 'say', arg: msg, command: String(readPluginConfig('GamlaSkolanLage').Prefix || '') });
 				return json({ ok: true });
 			}
 			case 'player':
@@ -93,11 +100,27 @@ export async function POST({ params, request }) {
 				return json({ ok: true });
 			case 'config':
 				return json({ ok: true, ...(await writePluginConfig(body.name, body.values || {})) });
-			case 'settings':
-				updateSettings(body);
+			case 'settings': {
+				const before = getSettings().lang;
+				const next = updateSettings(body);
+				if (next.lang !== before) await syncPluginLanguage();
+				return json({ ok: true, lang: next.lang });
+			}
+			case 'gslt':
+				saveGslt(body.token);
+				return json({ ok: true, gslt: maskedGslt() });
+			case 'prefix':
+				return json({ ok: true, ...(await setChatPrefix(body.prefix)) });
+			case 'modes/save':
+				return json({ ok: true, mode: saveMode(body.id, body.mode || {}) });
+			case 'modes/delete':
+				deleteMode(body.id);
+				return json({ ok: true });
+			case 'modes/reset':
+				resetMode(body.id);
 				return json({ ok: true });
 			default:
-				return fail('Okänd endpoint', 404);
+				return fail(L('Okänd endpoint', 'Unknown endpoint'), 404);
 		}
 	} catch (e) {
 		return fail(e);

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawn, execFile } from 'node:child_process';
-import { getSettings, paths, readGslt } from './settings.js';
+import { getSettings, paths, readGslt, L } from './settings.js';
 import { bridgeAlive, send } from './bridge.js';
 import { log } from './events.js';
 
@@ -92,7 +92,7 @@ async function probe() {
 		state.running = true;
 		state.pid = j.pid;
 		state.startedAt = j.created;
-		state.commandLine = (j.cmd || '').replace(/(sv_setsteamaccount\s+)"?[A-Fa-f0-9]+"?/i, '$1<dold>');
+		state.commandLine = (j.cmd || '').replace(/(sv_setsteamaccount\s+)"?[A-Fa-f0-9]+"?/i, '$1<hidden>');
 		state.memBytes = j.ws;
 	} else {
 		state.running = false;
@@ -124,15 +124,15 @@ function checkModeRequest() {
 	}
 	const modes = getSettings().modes;
 	if (!req?.mode || !modes[req.mode]) {
-		log('warn', `Okänt läge i omröstningen: ${req?.mode}`);
+		log('warn', L(`Okänt läge i omröstningen: ${req?.mode}`, `Unknown mode in vote: ${req?.mode}`));
 		return;
 	}
 	if (req.t && Date.now() - new Date(req.t).getTime() > 2 * 60 * 1000) return; // för gammal
 	if (!state.running || req.mode === currentMode()) return;
 	handlingRequest = true;
-	log('mode', `Spelarna röstade för ${modes[req.mode].name} – servern startar om i det läget`);
+	log('mode', L(`Spelarna röstade för ${modes[req.mode].name} – servern startar om i det läget`, `Players voted for ${modes[req.mode].name} – restarting the server in that mode`));
 	restartServer(req.mode)
-		.catch((e) => log('error', `Lägesbytet misslyckades: ${e.message}`))
+		.catch((e) => log('error', L(`Lägesbytet misslyckades: ${e.message}`, `Mode switch failed: ${e.message}`)))
 		.finally(() => (handlingRequest = false));
 }
 
@@ -230,27 +230,27 @@ function moveDir(from, to) {
 
 export function applyMode(id) {
 	const mode = getSettings().modes[id];
-	if (!mode) throw new Error(`Okänt läge: ${id}`);
-	if (state.running) throw new Error('Stoppa servern innan du byter läge.');
+	if (!mode) throw new Error(L(`Okänt läge: ${id}`, `Unknown mode: ${id}`));
+	if (state.running) throw new Error(L('Stoppa servern innan du byter läge.', 'Stop the server before switching mode.'));
 	const P = paths();
 	const changes = [];
 	for (const rel of mode.disable) {
 		const live = path.join(P.css, rel);
 		if (exists(live)) {
 			moveDir(live, path.join(P.panelDisabled, rel));
-			changes.push(`Stängde av ${rel}`);
+			changes.push(L(`Stängde av ${rel}`, `Disabled ${rel}`));
 		}
 	}
 	for (const rel of mode.enable) {
 		const live = path.join(P.css, rel);
 		if (exists(live)) continue;
 		const src = findDisabled(rel);
-		if (!src) throw new Error(`Hittar inte ${rel} någonstans – kan inte slå på läget ${mode.name}.`);
+		if (!src) throw new Error(L(`Hittar inte ${rel} någonstans – kan inte slå på läget ${mode.name}.`, `Cannot find ${rel} anywhere – cannot enable the mode ${mode.name}. Is the plugin installed?`));
 		if (src.copy) fs.cpSync(src.dir, live, { recursive: true });
 		else moveDir(src.dir, live);
-		changes.push(`Slog på ${rel}`);
+		changes.push(L(`Slog på ${rel}`, `Enabled ${rel}`));
 	}
-	log('mode', `Läge: ${mode.name}${changes.length ? ' – ' + changes.join(', ') : ''}`);
+	log('mode', `${L('Läge', 'Mode')}: ${mode.name}${changes.length ? ' – ' + changes.join(', ') : ''}`);
 	return changes;
 }
 
@@ -263,13 +263,13 @@ export function repairMetamod() {
 	const next = txt.replace(/(Game_LowViolence\s+csgo_lv[^\r\n]*)/, '$1\r\n\t\t\tGame\t\tcsgo/addons/metamod');
 	if (next === txt) return false;
 	fs.writeFileSync(file, next, 'utf8');
-	log('server', 'Lade tillbaka Metamod-raden i gameinfo.gi');
+	log('server', L('Lade tillbaka Metamod-raden i gameinfo.gi', 'Restored the Metamod line in gameinfo.gi'));
 	return true;
 }
 
 function startMariaDb() {
 	const bat = getSettings().mariadbBat;
-	if (!exists(bat)) return Promise.resolve(false);
+	if (!bat || !exists(bat)) return Promise.resolve(false);
 	return new Promise((resolve) => {
 		const p = spawn('cmd.exe', ['/c', bat], { windowsHide: true });
 		p.on('exit', (code) => resolve(code === 0));
@@ -282,17 +282,17 @@ function sleep(ms) {
 }
 
 export async function startServer(modeId) {
-	if (state.busy) throw new Error('Panelen håller redan på med något – vänta lite.');
+	if (state.busy) throw new Error(L('Panelen håller redan på med något – vänta lite.', 'The panel is busy – wait a moment.'));
 	await probe();
-	if (state.running) throw new Error('Servern körs redan.');
+	if (state.running) throw new Error(L('Servern körs redan.', 'The server is already running.'));
 	const s = getSettings();
 	const id = modeId || currentMode() || s.defaultMode;
 	const mode = s.modes[id];
-	if (!mode) throw new Error(`Okänt läge: ${id}`);
+	if (!mode) throw new Error(L(`Okänt läge: ${id}`, `Unknown mode: ${id}`));
 	const gslt = readGslt();
-	if (!gslt) throw new Error('Hittade ingen GSLT-token (sv_setsteamaccount) i dina startfiler.');
+	if (!gslt) throw new Error(L('Ingen GSLT-token – lägg in den under Inställningar.', 'No GSLT token – add it under Settings.'));
 	const P = paths();
-	if (!exists(P.exe)) throw new Error(`Hittar inte ${P.exe}`);
+	if (!exists(P.exe)) throw new Error(L(`Hittar inte ${P.exe}`, `Cannot find ${P.exe}`));
 
 	state.busy = 'starting';
 	state.lastError = null;
@@ -300,13 +300,13 @@ export async function startServer(modeId) {
 		applyMode(id);
 		repairMetamod();
 		if (mode.mariadb) {
-			log('server', 'Startar MariaDB…');
+			log('server', L('Startar MariaDB…', 'Starting MariaDB…'));
 			const ok = await startMariaDb();
-			if (!ok) log('warn', 'MariaDB startade inte – K4-Arenas kan inte spara vapenval.');
+			if (!ok) log('warn', L('MariaDB startade inte – K4-Arenas kan inte spara vapenval.', 'MariaDB did not start – K4-Arenas cannot save weapon choices.'));
 		}
 		let args = mode.args.replace('{port}', String(s.port)).replace('{gslt}', gslt);
 		// Starta i ett eget konsolfönster, precis som bat-filerna. Panelen kan stängas utan att servern dör.
-		const cmdline = `/c start "Gamla Skolan CS2 - ${mode.name}" /D "${P.bin}" cs2.exe ${args}`;
+		const cmdline = `/c start "CS2 Server - ${mode.name}" /D "${P.bin}" cs2.exe ${args}`;
 		const child = spawn('cmd.exe', [cmdline], {
 			windowsVerbatimArguments: true,
 			detached: true,
@@ -314,14 +314,14 @@ export async function startServer(modeId) {
 			windowsHide: false
 		});
 		child.unref();
-		log('server', `Startar servern i läget ${mode.name}…`);
+		log('server', L(`Startar servern i läget ${mode.name}…`, `Starting the server in ${mode.name} mode…`));
 		for (let i = 0; i < 20; i++) {
 			await sleep(1500);
 			await probe();
 			if (state.running) break;
 		}
-		if (!state.running) throw new Error('Servern startade inte – kolla konsolfönstret som öppnades.');
-		log('ok', `Servern är igång (PID ${state.pid})`);
+		if (!state.running) throw new Error(L('Servern startade inte – kolla konsolfönstret som öppnades.', 'The server did not start – check the console window that opened.'));
+		log('ok', L(`Servern är igång (PID ${state.pid})`, `Server is running (PID ${state.pid})`));
 	} catch (e) {
 		state.lastError = e.message;
 		log('error', e.message);
@@ -337,7 +337,7 @@ export async function stopServer() {
 	if (!state.running) return;
 	state.busy = 'stopping';
 	try {
-		log('server', 'Stoppar servern…');
+		log('server', L('Stoppar servern…', 'Stopping the server…'));
 		try {
 			if (bridgeAlive()) await send({ type: 'exec', command: 'quit' }, 2500);
 		} catch {
@@ -353,8 +353,8 @@ export async function stopServer() {
 			await sleep(1500);
 			await probe();
 		}
-		if (state.running) throw new Error('Kunde inte stoppa servern.');
-		log('ok', 'Servern är stoppad');
+		if (state.running) throw new Error(L('Kunde inte stoppa servern.', 'Could not stop the server.'));
+		log('ok', L('Servern är stoppad', 'Server stopped'));
 	} finally {
 		state.busy = null;
 	}

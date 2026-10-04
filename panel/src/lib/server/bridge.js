@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { paths } from './settings.js';
+import { paths, L } from './settings.js';
 
 function dirs() {
 	const base = path.join(paths().css, 'data', 'gs_panel');
@@ -36,7 +36,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function send(cmd, timeoutMs = 4000) {
 	const d = dirs();
-	if (!bridgeAlive()) throw new Error('Bryggpluginet svarar inte – starta om servern från panelen så laddas det.');
+	if (!bridgeAlive()) throw new Error(L('Bryggpluginet svarar inte – starta om servern från panelen så laddas det.', 'The bridge plugin is not responding – restart the server from the panel to load it.'));
 	fs.mkdirSync(d.cmd, { recursive: true });
 	const id = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 	const tmp = path.join(d.cmd, `${id}.tmp`);
@@ -53,21 +53,21 @@ export async function send(cmd, timeoutMs = 4000) {
 			} catch {
 				/* */
 			}
-			if (!r.ok) throw new Error(r.msg || 'Kommandot misslyckades');
+			if (!r.ok) throw new Error(r.msg || L('Kommandot misslyckades', 'The command failed'));
 			return r.msg;
 		} catch (e) {
 			if (e instanceof SyntaxError || e.code === 'ENOENT') continue;
 			throw e;
 		}
 	}
-	throw new Error('Servern svarade inte på kommandot i tid.');
+	throw new Error(L('Servern svarade inte på kommandot i tid.', 'The server did not answer the command in time.'));
 }
 
 // CS2 låter inte plugins läsa serverkonsolen, så vanliga kommandon svarar med "Kört"
 // (eller cvarens nya värde). "status" och "css_plugins list" besvaras från bryggans statusfil.
 function statusText() {
 	const st = readStatus();
-	if (!st) return 'Ingen status från servern.';
+	if (!st) return L('Ingen status från servern.', 'No status from the server.');
 	const out = [`Karta: ${st.map}   Spelare: ${st.players.filter((p) => !p.bot).length} + ${st.players.filter((p) => p.bot).length} bottar / ${st.maxPlayers}`, ''];
 	out.push('slot  lag   K/D       ping  namn');
 	for (const p of st.players)
@@ -87,5 +87,5 @@ export async function exec(command) {
 	if (/^status$/i.test(c)) return statusText();
 	if (/^css_plugins\s+list$/i.test(c) || /^meta\s+list$/i.test(c)) return pluginsText();
 	const r = await send({ type: 'exec', command: c });
-	return r === 'Kort' ? '✓ Kört på servern' : r;
+	return r === 'Kort' ? L('✓ Kört på servern', '✓ Ran on the server') : r;
 }
