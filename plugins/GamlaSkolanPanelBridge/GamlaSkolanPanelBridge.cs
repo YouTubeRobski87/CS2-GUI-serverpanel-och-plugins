@@ -18,7 +18,7 @@ namespace GamlaSkolanPanelBridge;
 public class GamlaSkolanPanelBridgePlugin : BasePlugin
 {
     public override string ModuleName => "Gamla Skolan Panel Bridge";
-    public override string ModuleVersion => "2.1.0";
+    public override string ModuleVersion => "2.2.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Ger Gamla Skolan-panelen status och spelarkommandon via filer.";
 
@@ -87,7 +87,7 @@ public class GamlaSkolanPanelBridgePlugin : BasePlugin
                 var cmd = c;
                 try
                 {
-                    if (string.IsNullOrWhiteSpace(cmd.command)) throw new Exception("Tomt kommando");
+                    if (string.IsNullOrWhiteSpace(cmd.command)) throw new Exception("Empty command");
                     Server.ExecuteCommand(cmd.command);
                     Server.NextFrame(() => Respond(cmd.id, true, DescribeExec(cmd.command)));
                 }
@@ -187,29 +187,29 @@ public class GamlaSkolanPanelBridgePlugin : BasePlugin
 
     private string PluginAction(string action, string dir)
     {
-        var pm = PM() ?? throw new Exception("Hittar inte CSS:s pluginhanterare");
-        if (string.Equals(dir, "GamlaSkolanPanelBridge", StringComparison.OrdinalIgnoreCase)) throw new Exception("Bryggan kan inte styra sig sjalv");
+        var pm = PM() ?? throw new Exception("Cannot find the CSS plugin manager");
+        if (string.Equals(dir, "GamlaSkolanPanelBridge", StringComparison.OrdinalIgnoreCase)) throw new Exception("The bridge cannot control itself");
         var ctx = pm.GetLoadedPlugins().FirstOrDefault(p => string.Equals(DirOf(p), dir, StringComparison.OrdinalIgnoreCase));
         _pluginCacheAt = DateTime.MinValue;
         switch (action)
         {
             case "unload":
-                if (ctx == null) throw new Exception("Pluginet ar inte laddat");
+                if (ctx == null) throw new Exception("The plugin is not loaded");
                 ctx.Unload(false);
-                return $"{dir} avlaget";
+                return $"{dir} unloaded";
             case "reload":
-                if (ctx == null) throw new Exception("Pluginet ar inte laddat");
+                if (ctx == null) throw new Exception("The plugin is not loaded");
                 ctx.Unload(true);
                 ctx.Load(true);
-                return $"{dir} omladdat";
+                return $"{dir} reloaded";
             case "load":
-                if (ctx != null) { ctx.Load(false); return $"{dir} laddat"; }
+                if (ctx != null) { ctx.Load(false); return $"{dir} loaded"; }
                 var dll = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", dir, dir + ".dll"));
-                if (!File.Exists(dll)) throw new Exception("Hittar inte " + dir + ".dll");
+                if (!File.Exists(dll)) throw new Exception("Cannot find " + dir + ".dll");
                 pm.LoadPlugin(dll);
-                return $"{dir} laddat";
+                return $"{dir} loaded";
             default:
-                throw new Exception("Okand pluginatgard");
+                throw new Exception("Unknown plugin action");
         }
     }
 
@@ -222,19 +222,23 @@ public class GamlaSkolanPanelBridgePlugin : BasePlugin
             case "say":
             {
                 var text = (c.arg ?? "").Replace("\n", " ").Trim();
-                if (text.Length == 0) throw new Exception("Tomt meddelande");
-                Server.PrintToChatAll($" {ChatColors.Gold}[Gamla Skolan]{ChatColors.Default} {text}");
-                return "Skickat";
+                if (text.Length == 0) throw new Exception("Empty message");
+                var prefix = string.IsNullOrWhiteSpace(c.command) ? "{gold}[Server]{default}" : c.command;
+                prefix = prefix.Replace("{gold}", $"{ChatColors.Gold}").Replace("{default}", $"{ChatColors.Default}")
+                    .Replace("{green}", $"{ChatColors.Green}").Replace("{red}", $"{ChatColors.Red}")
+                    .Replace("{lightred}", $"{ChatColors.LightRed}").Replace("{blue}", $"{ChatColors.Blue}");
+                Server.PrintToChatAll($" {prefix} {text}");
+                return "Sent";
             }
             case "plugin":
                 return PluginAction(c.arg, c.command);
             case "kick":
             {
                 var p = Slot(c.slot);
-                var reason = string.IsNullOrWhiteSpace(c.arg) ? "Kickad av admin" : c.arg.Replace("\"", "'");
+                var reason = string.IsNullOrWhiteSpace(c.arg) ? "Kicked by admin" : c.arg.Replace("\"", "'");
                 if (p.IsBot) Server.ExecuteCommand($"bot_kick \"{p.PlayerName}\"");
                 else Server.ExecuteCommand($"kickid {p.UserId} \"{reason}\"");
-                return $"{p.PlayerName} kickad";
+                return $"{p.PlayerName} kicked";
             }
             case "team":
             {
@@ -247,17 +251,17 @@ public class GamlaSkolanPanelBridgePlugin : BasePlugin
             {
                 var p = Slot(c.slot);
                 p.PlayerPawn.Value?.CommitSuicide(false, true);
-                return $"{p.PlayerName} slayad";
+                return $"{p.PlayerName} slain";
             }
             default:
-                throw new Exception("Okant kommando");
+                throw new Exception("Unknown command");
         }
     }
 
     private static CCSPlayerController Slot(int slot)
     {
         var p = Utilities.GetPlayerFromSlot(slot);
-        if (p == null || !p.IsValid) throw new Exception("Hittade ingen spelare");
+        if (p == null || !p.IsValid) throw new Exception("Player not found");
         return p;
     }
 
@@ -328,10 +332,10 @@ public class GamlaSkolanPanelBridgePlugin : BasePlugin
         if (!ServerOnly(caller)) return;
         var p = BySlot(cmd);
         if (p == null) { cmd.ReplyToCommand("GSPANEL_ERR Hittade ingen spelare"); return; }
-        string reason = cmd.ArgCount > 2 ? cmd.ArgString.Substring(cmd.GetArg(1).Length).Trim().Trim('"') : "Kickad av admin";
+        string reason = cmd.ArgCount > 2 ? cmd.ArgString.Substring(cmd.GetArg(1).Length).Trim().Trim('"') : "Kicked by admin";
         if (p.IsBot) Server.ExecuteCommand($"bot_kick \"{p.PlayerName}\"");
         else Server.ExecuteCommand($"kickid {p.UserId} \"{reason.Replace("\"", "'")}\"");
-        cmd.ReplyToCommand($"GSPANEL_OK {p.PlayerName} kickad");
+        cmd.ReplyToCommand($"GSPANEL_OK {p.PlayerName} kicked");
     }
 
     [ConsoleCommand("gs_panel_team", "gs_panel_team <slot> <t|ct|spec>")]
@@ -339,7 +343,7 @@ public class GamlaSkolanPanelBridgePlugin : BasePlugin
     {
         if (!ServerOnly(caller)) return;
         var p = BySlot(cmd);
-        if (p == null || cmd.ArgCount < 3) { cmd.ReplyToCommand("GSPANEL_ERR Fel argument"); return; }
+        if (p == null || cmd.ArgCount < 3) { cmd.ReplyToCommand("GSPANEL_ERR Bad arguments"); return; }
         var team = cmd.GetArg(2).ToLowerInvariant() switch
         {
             "t" => CsTeam.Terrorist,
@@ -357,6 +361,6 @@ public class GamlaSkolanPanelBridgePlugin : BasePlugin
         var p = BySlot(cmd);
         if (p == null) { cmd.ReplyToCommand("GSPANEL_ERR Hittade ingen spelare"); return; }
         p.PlayerPawn.Value?.CommitSuicide(false, true);
-        cmd.ReplyToCommand($"GSPANEL_OK {p.PlayerName} slayad");
+        cmd.ReplyToCommand($"GSPANEL_OK {p.PlayerName} slain");
     }
 }

@@ -16,17 +16,26 @@ public class MvpConfig : BasePluginConfig
     [JsonPropertyName("KillLimit")] public int KillLimit { get; set; } = 100;
     [JsonPropertyName("CelebrationSeconds")] public int CelebrationSeconds { get; set; } = 10;
     [JsonPropertyName("MapCycleFile")] public string MapCycleFile { get; set; } = "mapcycle_dm.txt";
+    [JsonPropertyName("Prefix")] public string Prefix { get; set; } = "{green}[Server]{default}";
+    // "en" eller "sv"
+    [JsonPropertyName("Language")] public string Language { get; set; } = "en";
 }
 
 [MinimumApiVersion(375)]
 public class GamlaSkolanMvpPlugin : BasePlugin, IPluginConfig<MvpConfig>
 {
     public override string ModuleName => "Gamla Skolan MVP";
-    public override string ModuleVersion => "1.1.0";
+    public override string ModuleVersion => "1.2.0";
     public override string ModuleAuthor => "Gamla Skolan";
-    public override string ModuleDescription => "Forst till X kills i deathmatch blir MVP, sedan byts kartan.";
+    public override string ModuleDescription => "First to X kills in deathmatch is MVP, then the map changes.";
 
     public MvpConfig Config { get; set; } = new();
+    private bool Sv => string.Equals(Config.Language, "sv", StringComparison.OrdinalIgnoreCase);
+    private string T(string sv, string en) => Sv ? sv : en;
+    private string P => Config.Prefix
+        .Replace("{gold}", $"{ChatColors.Gold}").Replace("{default}", $"{ChatColors.Default}")
+        .Replace("{green}", $"{ChatColors.Green}").Replace("{red}", $"{ChatColors.Red}")
+        .Replace("{lightred}", $"{ChatColors.LightRed}").Replace("{blue}", $"{ChatColors.Blue}");
 
     private readonly Dictionary<ulong, int> _kills = new();
     private bool _finished;
@@ -69,7 +78,8 @@ public class GamlaSkolanMvpPlugin : BasePlugin, IPluginConfig<MvpConfig>
         _kills[id] = kills;
 
         if (kills == Config.KillLimit - 10 || kills == Config.KillLimit - 5)
-            Server.PrintToChatAll($" \x04[Gamla Skolan]\x01 {attacker.PlayerName} har \x04{kills}\x01 kills – {Config.KillLimit - kills} kvar till vinst!");
+            Server.PrintToChatAll(T($" {P} {attacker.PlayerName} har \x04{kills}\x01 kills – {Config.KillLimit - kills} kvar till vinst!",
+                                    $" {P} {attacker.PlayerName} has \x04{kills}\x01 kills – {Config.KillLimit - kills} to go!"));
 
         if (kills >= Config.KillLimit)
             Finish(attacker);
@@ -92,8 +102,10 @@ public class GamlaSkolanMvpPlugin : BasePlugin, IPluginConfig<MvpConfig>
         }
         catch (Exception ex) { Logger.LogWarning(ex, "Kunde inte satta MVP-stjarna"); }
 
-        string nextText = next != null ? $"Nästa karta: {next}" : "Ny karta laddas";
-        string chat = $" \x10★ MVP ★\x01 \x04{name}\x01 var först till \x04{Config.KillLimit} kills\x01! {nextText} om {Config.CelebrationSeconds} sekunder.";
+        string nextText = next != null ? T($"Nästa karta: {next}", $"Next map: {next}") : T("Ny karta laddas", "New map loading");
+        string Chat(int secs) => T($" \x10★ MVP ★\x01 \x04{name}\x01 var först till \x04{Config.KillLimit} kills\x01! {nextText} om {secs} sekunder.",
+                                   $" \x10★ MVP ★\x01 \x04{name}\x01 was first to \x04{Config.KillLimit} kills\x01! {nextText} in {secs} seconds.");
+        string chat = Chat(Config.CelebrationSeconds);
         Server.PrintToChatAll(chat);
 
         // Frys alla och gör dem odödliga under firandet, så att ingen spelar vidare.
@@ -108,14 +120,14 @@ public class GamlaSkolanMvpPlugin : BasePlugin, IPluginConfig<MvpConfig>
             string html =
                 "<font class='fontSize-xl' color='#FFD700'>★ MVP ★</font><br>" +
                 $"<font class='fontSize-l' color='#FFFFFF'>{System.Net.WebUtility.HtmlEncode(name)}</font><br>" +
-                $"<font class='fontSize-m' color='#A0FFA0'>Först till {Config.KillLimit} kills!</font><br>" +
-                $"<font class='fontSize-s' color='#CCCCCC'>{System.Net.WebUtility.HtmlEncode(nextText)} om {left} s</font>";
+                $"<font class='fontSize-m' color='#A0FFA0'>{T("Först till", "First to")} {Config.KillLimit} kills!</font><br>" +
+                $"<font class='fontSize-s' color='#CCCCCC'>{System.Net.WebUtility.HtmlEncode(nextText)} {T("om", "in")} {left} s</font>";
             foreach (var p in Utilities.GetPlayers().Where(IsHuman))
                 p.PrintToCenterHtml(html, 1);
             if (left > 0 && left % 4 == 0 && left != lastChatSecond)
             {
                 lastChatSecond = left;
-                Server.PrintToChatAll(chat.Replace($"om {Config.CelebrationSeconds} sekunder", $"om {left} sekunder"));
+                Server.PrintToChatAll(Chat(left));
             }
         }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
 

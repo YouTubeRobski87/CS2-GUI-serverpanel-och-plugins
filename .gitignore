@@ -1,5 +1,5 @@
 # Byggt och beroenden
-node_modules/
+node_modules
 panel/build/
 panel/.svelte-kit/
 **/bin/

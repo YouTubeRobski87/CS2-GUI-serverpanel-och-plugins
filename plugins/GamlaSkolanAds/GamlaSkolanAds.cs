@@ -10,7 +10,7 @@ public class AdsConfig : BasePluginConfig
 {
     [JsonPropertyName("IntervalSeconds")] public float IntervalSeconds { get; set; } = 120f;
 
-    [JsonPropertyName("Prefix")] public string Prefix { get; set; } = "{green}[Gamla Skolan]{default}";
+    [JsonPropertyName("Prefix")] public string Prefix { get; set; } = "{green}[Server]{default}";
 
     [JsonPropertyName("Messages")] public List<string> Messages { get; set; } = new()
     {
