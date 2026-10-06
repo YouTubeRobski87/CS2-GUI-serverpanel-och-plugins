@@ -1,0 +1,20 @@
+{
+  "hud.leap.ready": "Hopp Ctrl+Space",
+  "hud.leap.cooldown": "Hopp {0}s",
+  "hud.rage.ready": "Bärsärk R",
+  "hud.rage.cooldown": "Bärsärk {0}s",
+  "round.nobody": "Ingen överlevde.",
+  "round.humans": "Alla smittade är förintade.",
+  "round.zombies": "Alla är smittade.",
+  "round.strike": "Flygräd: bomben tog de smittade – människorna vinner.",
+  "round.timeout": "Tiden är ute. De smittade höll inte – människorna vinner.",
+  "round.time_left": "De smittade har {0} s kvar.",
+  "waiting.players": "Väntar på spelare – minst {0} behövs, {1} nu. Smittan startar inte än.",
+  "infection.started": "En av de överlevande är inte längre sig själv.",
+  "bleed.started": "Såret blöder. Du behöver en medkit.",
+  "bleed.stopped": "Blödningen har stoppats.",
+  "turned.you": "Du är inte längre du.",
+  "turned.first_hint": "Hopp – Ctrl + Space, bärsärk – R ({0} s osårbar).",
+  "bite.healed": "+{0} HP",
+  "berserk.on": "Bärsärk – {0} s: osårbar, ingen knockback."
+}

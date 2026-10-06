@@ -23,7 +23,7 @@ export const DEFAULTS = {
 			description: 'The bomb is already planted – CT retakes the site. Weapon menu with !guns, works with bots.',
 			args: '-dedicated -console -usercon -port {port} +game_type 0 +game_mode 1 +mapgroup mg_active +map de_mirage +sv_setsteamaccount {gslt} +exec server.cfg',
 			enable: ['plugins/RetakesPlugin', 'plugins/GamlaSkolanVapen', 'plugins/InstadefusePlugin', 'plugins/ClutchAnnouncePlugin'],
-			disable: ['plugins/Deathmatch', 'shared/DeathmatchAPI', 'plugins/K4-Arenas', 'plugins/K4-Arenas-Bots', 'plugins/GamlaSkolanMvp'],
+			disable: ['plugins/Deathmatch', 'shared/DeathmatchAPI', 'plugins/K4-Arenas', 'plugins/K4-Arenas-Bots', 'plugins/GamlaSkolanMvp', 'plugins/ZombieMode', 'plugins/ZombieMode.Money', 'plugins/ZombieMode.Magazines', 'plugins/ZombieMode.WeaponDamage'],
 			mariadb: false,
 			maps: ['de_mirage', 'de_dust2', 'de_inferno', 'de_nuke', 'de_ancient', 'de_anubis', 'de_overpass', 'de_vertigo', 'de_train']
 		},
@@ -32,7 +32,7 @@ export const DEFAULTS = {
 			description: 'Free for all, first to 100 kills wins the map. MVP celebration and map rotation.',
 			args: '-dedicated -console -usercon -port {port} +game_type 1 +game_mode 2 +mapgroup mg_active +map de_dust2 +sv_setsteamaccount {gslt} +exec server.cfg',
 			enable: ['plugins/Deathmatch', 'shared/DeathmatchAPI', 'plugins/GamlaSkolanMvp'],
-			disable: ['plugins/K4-Arenas', 'plugins/K4-Arenas-Bots', 'plugins/RetakesPlugin', 'plugins/GamlaSkolanVapen', 'plugins/InstadefusePlugin', 'plugins/ClutchAnnouncePlugin'],
+			disable: ['plugins/K4-Arenas', 'plugins/K4-Arenas-Bots', 'plugins/RetakesPlugin', 'plugins/GamlaSkolanVapen', 'plugins/InstadefusePlugin', 'plugins/ClutchAnnouncePlugin', 'plugins/ZombieMode', 'plugins/ZombieMode.Money', 'plugins/ZombieMode.Magazines', 'plugins/ZombieMode.WeaponDamage'],
 			mariadb: false,
 			maps: ['de_dust2', 'de_inferno', 'de_mirage', 'de_nuke', 'de_train', 'de_ancient', 'de_anubis', 'de_vertigo', 'de_overpass']
 		},
@@ -41,9 +41,18 @@ export const DEFAULTS = {
 			description: 'K4-Arenas – 1v1 duels that rotate through arenas. Needs MySQL/MariaDB and an arena map.',
 			args: '-dedicated -console -usercon -port {port} +game_type 0 +game_mode 0 +map de_dust2 +sv_setsteamaccount {gslt} +exec server.cfg',
 			enable: ['plugins/K4-Arenas'],
-			disable: ['plugins/Deathmatch', 'shared/DeathmatchAPI', 'plugins/RetakesPlugin', 'plugins/GamlaSkolanVapen', 'plugins/InstadefusePlugin', 'plugins/ClutchAnnouncePlugin'],
+			disable: ['plugins/Deathmatch', 'shared/DeathmatchAPI', 'plugins/RetakesPlugin', 'plugins/GamlaSkolanVapen', 'plugins/InstadefusePlugin', 'plugins/ClutchAnnouncePlugin', 'plugins/ZombieMode', 'plugins/ZombieMode.Money', 'plugins/ZombieMode.Magazines', 'plugins/ZombieMode.WeaponDamage'],
 			mariadb: true,
 			maps: []
+		},
+		zombie: {
+			name: 'Zombie',
+			description: 'Infection: one hidden player turns, bites make you bleed. Humans survive the round, zombies infect everyone.',
+			args: '-dedicated -console -usercon -port {port} +game_type 0 +game_mode 0 +mapgroup mg_active +map de_dust2 +sv_setsteamaccount {gslt} +exec server.cfg',
+			enable: ['plugins/ZombieMode', 'plugins/ZombieMode.Money', 'plugins/ZombieMode.Magazines', 'plugins/ZombieMode.WeaponDamage'],
+			disable: ['plugins/Deathmatch', 'shared/DeathmatchAPI', 'plugins/K4-Arenas', 'plugins/K4-Arenas-Bots', 'plugins/RetakesPlugin', 'plugins/GamlaSkolanVapen', 'plugins/InstadefusePlugin', 'plugins/ClutchAnnouncePlugin', 'plugins/GamlaSkolanMvp'],
+			mariadb: false,
+			maps: ['de_dust2', 'de_mirage', 'de_inferno', 'cs_office', 'cs_italy', 'de_nuke', 'de_vertigo', 'de_ancient']
 		}
 	}
 };
