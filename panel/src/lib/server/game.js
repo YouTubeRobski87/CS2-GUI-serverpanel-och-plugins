@@ -113,8 +113,8 @@ export const titleOf = (name) => {
 };
 
 // Plugins som har Language/Prefix i sin config.
-const LANG_PLUGINS = ['GamlaSkolanLage', 'GamlaSkolanMvp', 'GamlaSkolanRank', 'GamlaSkolanVapen'];
-const PREFIX_PLUGINS = ['GamlaSkolanLage', 'GamlaSkolanMvp', 'GamlaSkolanVapen', 'GamlaSkolanAds'];
+const LANG_PLUGINS = ['GamlaSkolanLage', 'GamlaSkolanMvp', 'GamlaSkolanRank', 'GamlaSkolanVapen', 'GamlaSkolanZombieMenu'];
+const PREFIX_PLUGINS = ['GamlaSkolanLage', 'GamlaSkolanMvp', 'GamlaSkolanVapen', 'GamlaSkolanAds', 'GamlaSkolanZombieMenu'];
 
 function cfgFile(name) {
 	return path.join(paths().cssConfigs, name, `${name}.json`);
@@ -207,6 +207,69 @@ export async function syncPluginLanguage() {
 	for (const name of changed) await reloadIfRunning(name);
 	if (changed.length) log('config', L(`Plugin-språk: svenska (${changed.join(', ')})`, `Plugin language: English (${changed.join(', ')})`));
 	return changed;
+}
+
+// ---------------- Zombie (cs2-zombie-mode) ----------------
+// Pluginet läser sin config bara när det laddas, så ändringar gäller när servern startas om.
+export const ZOMBIE_FIELDS = [
+	{ path: 'infection.roundLimitSeconds', sv: 'Rundtid (sek)', en: 'Round time (s)', min: 120, max: 1800, step: 30, def: 420 },
+	{ path: 'infection.hpBase', sv: 'Zombie-HP (bas)', en: 'Zombie HP (base)', min: 100, max: 10000, step: 100, def: 1500 },
+	{ path: 'infection.hpPerHuman', sv: 'Extra HP per levande människa', en: 'Extra HP per living human', min: 0, max: 1000, step: 25, def: 100 },
+	{ path: 'infection.hpCap', sv: 'Max HP', en: 'Max HP', min: 500, max: 20000, step: 250, def: 6000 },
+	{ path: 'infection.firstInfectedMultiplier', sv: 'Första zombien × HP', en: 'First infected × HP', min: 1, max: 6, step: 0.25, def: 2.5 },
+	{ path: 'knockback.multiplier', sv: 'Knockback', en: 'Knockback', min: 0, max: 20, step: 0.5, def: 6 },
+	{ path: 'infection.bleedDamage', sv: 'Blödning (HP per tick)', en: 'Bleeding (HP per tick)', min: 1, max: 30, step: 1, def: 5 },
+	{ path: 'infection.leapCooldown', sv: 'Hopp, nedkylning (sek)', en: 'Leap cooldown (s)', min: 1, max: 30, step: 1, def: 8 },
+	{ path: 'infection.minToStart', sv: 'Minst antal spelare för smitta', en: 'Minimum players to infect', min: 1, max: 20, step: 1, def: 2 }
+];
+
+function zombieFile() {
+	return path.join(paths().cssConfigs, 'ZombieMode', 'ZombieMode.json');
+}
+const getPath = (o, p) => p.split('.').reduce((x, k) => (x == null ? undefined : x[k]), o);
+function setPath(o, p, v) {
+	const keys = p.split('.');
+	let x = o;
+	for (const k of keys.slice(0, -1)) x = x[k] ??= {};
+	x[keys.at(-1)] = v;
+}
+
+export function readZombieConfig() {
+	let raw = null;
+	try {
+		raw = JSON.parse(stripComments(fs.readFileSync(zombieFile(), 'utf8')));
+	} catch {
+		/* skapas när pluginet laddats första gången */
+	}
+	return {
+		exists: !!raw,
+		fields: ZOMBIE_FIELDS.map((f) => ({ ...f, label: L(f.sv, f.en), value: getPath(raw || {}, f.path) ?? f.def }))
+	};
+}
+
+export function writeZombieConfig(values) {
+	const file = zombieFile();
+	let raw;
+	try {
+		raw = JSON.parse(stripComments(fs.readFileSync(file, 'utf8')));
+	} catch {
+		throw new Error(L('Zombie-configen finns inte än – starta Zombie-läget en gång först.', 'The Zombie config does not exist yet – start Zombie mode once first.'));
+	}
+	for (const f of ZOMBIE_FIELDS) {
+		if (values[f.path] === undefined) continue;
+		let v = Number(values[f.path]);
+		if (!Number.isFinite(v)) continue;
+		v = Math.min(f.max, Math.max(f.min, v));
+		if (Number.isInteger(f.step)) v = Math.round(v);
+		setPath(raw, f.path, v);
+	}
+	// Motorns rundtid följer pluginets tidsgräns.
+	const minutes = String(Math.ceil(getPath(raw, 'infection.roundLimitSeconds') / 60));
+	raw.cvars = { ...(raw.cvars || {}), mp_roundtime: minutes, mp_roundtime_defuse: minutes, mp_roundtime_hostage: minutes };
+	fs.copyFileSync(file, `${file}.panel-backup`);
+	fs.writeFileSync(file, JSON.stringify(raw, null, 2), 'utf8');
+	log('config', L('Sparade Zombie-inställningar (gäller efter omstart)', 'Saved Zombie settings (applies after restart)'));
+	return readZombieConfig();
 }
 
 // ---------------- kom igång-kontroll ----------------

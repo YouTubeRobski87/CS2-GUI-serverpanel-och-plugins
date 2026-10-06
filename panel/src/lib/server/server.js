@@ -128,9 +128,10 @@ function checkModeRequest() {
 		return;
 	}
 	if (req.t && Date.now() - new Date(req.t).getTime() > 2 * 60 * 1000) return; // för gammal
-	if (!state.running || req.mode === currentMode()) return;
+	if (!state.running || (req.mode === currentMode() && !req.restart)) return;
 	handlingRequest = true;
-	log('mode', L(`Spelarna röstade för ${modes[req.mode].name} – servern startar om i det läget`, `Players voted for ${modes[req.mode].name} – restarting the server in that mode`));
+	if (req.restart && req.mode === currentMode()) log('server', L(`Omstart begärd från spelet (${req.by || 'admin'})`, `Restart requested in game (${req.by || 'admin'})`));
+	else log('mode', L(`Spelarna röstade för ${modes[req.mode].name} – servern startar om i det läget`, `Players voted for ${modes[req.mode].name} – restarting the server in that mode`));
 	restartServer(req.mode)
 		.catch((e) => log('error', L(`Lägesbytet misslyckades: ${e.message}`, `Mode switch failed: ${e.message}`)))
 		.finally(() => (handlingRequest = false));

@@ -201,6 +201,7 @@ Alla ligger i `plugins/` och byggs mot serverns egen CounterStrikeSharp (API 375
 | **GamlaSkolanLage** | Omröstning om spelläge, sätter servernamnet vid varje kartstart | `!lage`, `!mode` |
 | **GamlaSkolanVapen** | Vapenval för Retakes: T-/CT-gevär, AWP (max 1 per lag), sidovapen, pistolrundor. Meny med W/S/E/A/R. Sparas per spelare | `!vapen`, `!guns`, `!gun` |
 | **GamlaSkolanArenaBots** | I 1v1 Arenas: tar ifrån bottarna kniven när de har ett vapen, så de inte springer runt med kniv (påverkar inte knivrundor eller riktiga spelare) | – |
+| **GamlaSkolanZombieMenu** | Adminmeny för Zombie-läget: rundtid, HP, knockback, blödning m.m. Sparar i ZombieMode.json och kan be panelen starta om servern | `!zm`, `!zombie` |
 | **GamlaSkolanRank** | Poäng per kill/död, räknas även i deathmatch (bottar halva poängen) | `!rank`, `!top` |
 | **GamlaSkolanMvp** | Först till X kills: fryser alla, MVP-banner, byter karta från kartlistan | – |
 | **GamlaSkolanAds** | Chattips på svenska med färger, redigeras i panelen | – |
