@@ -26,7 +26,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.0.0";
+    public override string ModuleVersion => "1.0.1";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings: !zm";
 
@@ -196,7 +196,12 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
     {
         var sb = new System.Text.StringBuilder();
         sb.Append($"<font color='#f5a524' class='fontSize-m'>{T("Zombie-inställningar", "Zombie settings")}</font><br>");
-        for (int i = 0; i < ItemCount; i++)
+        sb.Append($"<font color='#9b917f' class='fontSize-s'>{T("W/S välj · A/D ändra · E spara · R stäng", "W/S select · A/D change · E save · R close")}</font><br>");
+        // Visa bara några rader åt gången – mitten-texten i CS2 får inte plats med alla.
+        const int window = 6;
+        int start = Math.Clamp(m.Sel - window / 2, 0, Math.Max(0, ItemCount - window));
+        if (start > 0) sb.Append("<font color='#9b917f'>▲</font><br>");
+        for (int i = start; i < Math.Min(ItemCount, start + window); i++)
         {
             string text;
             if (i < Fields.Length)
@@ -213,7 +218,7 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
             };
             sb.Append(i == m.Sel ? $"<font color='#7CFC00'>▶ {Esc(text)}</font><br>" : $"<font color='#ffffff'>{Esc(text)}</font><br>");
         }
-        sb.Append($"<font color='#9b917f' class='fontSize-s'>{T("W/S: välj · A/D: ändra · E: spara · R: stäng", "W/S: select · A/D: change · E: save · R: close")}</font>");
+        if (start + window < ItemCount) sb.Append("<font color='#9b917f'>▼</font>");
         p.PrintToCenterHtml(sb.ToString());
     }
 }
