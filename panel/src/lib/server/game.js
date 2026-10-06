@@ -87,7 +87,7 @@ export function rankings() {
 export const EDITABLE = {
 	GamlaSkolanLage: {
 		title: ['Servernamn', 'Server name'],
-		defaults: { Hostname: 'CS2 Multimode – Retakes • DM • 1v1', Prefix: '{gold}[Server]{default}', Language: 'en', ConfigVersion: 1 }
+		defaults: { Hostname: 'CS2 Multimode – Retakes • DM • 1v1', Prefix: '{gold}[Server]{default}', Language: 'en', IdleBots: 0, ConfigVersion: 1 }
 	},
 	GamlaSkolanAds: {
 		title: ['Tips i chatten', 'Chat tips'],
