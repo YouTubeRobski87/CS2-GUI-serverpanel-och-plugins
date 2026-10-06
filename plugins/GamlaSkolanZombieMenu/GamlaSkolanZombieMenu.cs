@@ -26,7 +26,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.2.0";
+    public override string ModuleVersion => "1.2.1";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -130,9 +130,9 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
             : T($"{best.s.kills} kills · {best.s.damage} skada", $"{best.s.kills} kills · {best.s.damage} damage");
         var name = Esc(p.PlayerName);
         _mvpHtml =
-            $"<font class='fontSize-xl' color='#FFD700'>★ {T("RUNDANS MVP", "ROUND MVP")} ★</font><br>" +
-            $"<font class='fontSize-xl' color='{(zombie ? "#ff5a5a" : "#7CFC00")}'>{name}</font><br>" +
-            $"<font class='fontSize-m' color='#ffffff'>{role} · {Esc(stats)}</font>";
+            $"<font class='fontSize-m' color='#FFD700'>★ {T("RUNDANS MVP", "ROUND MVP")}</font><br>" +
+            $"<font class='fontSize-l' color='{(zombie ? "#ff5a5a" : "#7CFC00")}'>{name}</font><br>" +
+            $"<font class='fontSize-s' color='#ffffff'>{role} · {Esc(stats)}</font>";
         _mvpUntil = DateTime.UtcNow.AddSeconds(MvpShowSeconds);
         Server.PrintToChatAll($" {P} {ChatColors.Gold}★ {T("Rundans MVP", "Round MVP")}:{ChatColors.Default} {(zombie ? ChatColors.Red : ChatColors.Green)}{p.PlayerName}{ChatColors.Default} – {stats}");
         return HookResult.Continue;
