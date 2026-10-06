@@ -26,9 +26,9 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.0.1";
+    public override string ModuleVersion => "1.1.0";
     public override string ModuleAuthor => "Gamla Skolan";
-    public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings: !zm";
+    public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
     public ZombieMenuConfig Config { get; set; } = new();
     public void OnConfigParsed(ZombieMenuConfig config) => Config = config;
@@ -68,7 +68,25 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
 
     private string ZombieFile => Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "configs", "plugins", "ZombieMode", "ZombieMode.json"));
 
-    public override void Load(bool hotReload) => RegisterListener<Listeners.OnTick>(OnTick);
+    public override void Load(bool hotReload)
+    {
+        RegisterListener<Listeners.OnTick>(OnTick);
+        // Ingen warmup i Zombie: CS2:s lägesconfigar slår på den vid varje kartstart, så vi avslutar den direkt.
+        AddTimer(2f, NoWarmup, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
+    }
+
+    private void NoWarmup()
+    {
+        try
+        {
+            var rules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+            if (rules == null || !rules.WarmupPeriod) return;
+            Server.ExecuteCommand("mp_do_warmup_period 0");
+            Server.ExecuteCommand("mp_warmuptime 0");
+            Server.ExecuteCommand("mp_warmup_end");
+        }
+        catch { /* kartan laddas */ }
+    }
 
     private static bool IsAdmin(CCSPlayerController p) =>
         AdminManager.PlayerHasPermissions(p, "@css/root") || AdminManager.PlayerHasPermissions(p, "@css/config")
