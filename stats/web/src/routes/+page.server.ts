@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import { db } from '$lib/supabase';
 import type { Kill, PlayerStats } from '$lib/format';
 import type { PageServerLoad } from './$types';
@@ -14,6 +15,11 @@ export const load: PageServerLoad = async ({ setHeaders }) => {
       .or('attacker_bot.eq.false,victim_bot.eq.false').order('at', { ascending: false }).limit(12),
     supabase.from('kills').select('id', { count: 'exact', head: true })
   ]);
+
+  if (players.error) {
+    console.error('Supabase:', players.error.message);
+    error(503, 'Statistiken kunde inte hämtas just nu. Försök igen om en stund.');
+  }
 
   return {
     players: (players.data ?? []) as PlayerStats[],
