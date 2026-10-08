@@ -19,7 +19,12 @@ public class RankConfig : BasePluginConfig
     [JsonPropertyName("ShowPointMessages")] public bool ShowPointMessages { get; set; } = true;
     // "en" eller "sv"
     [JsonPropertyName("Language")] public string Language { get; set; } = "en";
+    // Statistiksidan: adress till ingest-funktionen och den hemliga token. Tomt = av.
+    [JsonPropertyName("StatsUrl")] public string StatsUrl { get; set; } = "";
+    [JsonPropertyName("StatsToken")] public string StatsToken { get; set; } = "";
 }
+
+public record PlayerDto(string steam_id, string name, int points, int kills, int deaths, DateTime last_seen);
 
 public class PlayerRank
 {
@@ -35,7 +40,7 @@ public class PlayerRank
 public class GamlaSkolanRankPlugin : BasePlugin, IPluginConfig<RankConfig>
 {
     public override string ModuleName => "Gamla Skolan Rank";
-    public override string ModuleVersion => "1.2.0";
+    public override string ModuleVersion => "1.3.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Simple persistent rank for K4-Arenas and Deathmatch.";
 
@@ -60,7 +65,10 @@ public class GamlaSkolanRankPlugin : BasePlugin, IPluginConfig<RankConfig>
     {
         _dataFile = Path.Combine(ModuleDirectory, "data", "rankings.json");
         LoadRankings();
+        AddTimer(15f, FlushStats, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
     }
+
+    public override void Unload(bool hotReload) => FlushStats();
 
     [GameEventHandler(HookMode.Post)]
     public HookResult OnPlayerDeath(EventPlayerDeath @event, GameEventInfo info)
@@ -80,7 +88,9 @@ public class GamlaSkolanRankPlugin : BasePlugin, IPluginConfig<RankConfig>
         if (!TeammatesAreEnemies() && attacker.Team == victim.Team)
             return HookResult.Continue;
 
-        if (Utilities.GetPlayers().Count(IsHuman) < Config.MinimumHumanPlayers)
+        bool ranked = Utilities.GetPlayers().Count(IsHuman) >= Config.MinimumHumanPlayers;
+        QueueKill(attacker, victim, @event.Weapon, @event.Headshot, ranked);
+        if (!ranked)
             return HookResult.Continue;
 
         // Bottinblandning ger halva poäng åt båda hållen.
@@ -107,6 +117,8 @@ public class GamlaSkolanRankPlugin : BasePlugin, IPluginConfig<RankConfig>
             }
 
             SaveRankings();
+            if (killer != null) _dirty.Add(killer.SteamId);
+            if (dead != null) _dirty.Add(dead.SteamId);
 
             if (Config.ShowPointMessages)
             {
@@ -221,6 +233,94 @@ public class GamlaSkolanRankPlugin : BasePlugin, IPluginConfig<RankConfig>
                 _players = new();
             }
         }
+    }
+
+    // ---------------------------------------------------------------- statistiksidan
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
+    private readonly List<object> _pendingKills = new();
+    private readonly HashSet<ulong> _dirty = new();
+    private int _sending;
+
+    private static readonly (string id, string dir)[] Modes =
+    {
+        ("retakes", "RetakesPlugin"), ("deathmatch", "Deathmatch"), ("arenas", "K4-Arenas"), ("zombie", "ZombieMode"),
+    };
+
+    private string CurrentMode()
+    {
+        var pluginsDir = Path.GetFullPath(Path.Combine(ModuleDirectory, ".."));
+        foreach (var m in Modes)
+            if (Directory.Exists(Path.Combine(pluginsDir, m.dir))) return m.id;
+        return "other";
+    }
+
+    private static ulong SteamIdOf(CCSPlayerController p) => p.IsBot ? 0 : (p.AuthorizedSteamID?.SteamId64 ?? p.SteamID);
+
+    private void QueueKill(CCSPlayerController attacker, CCSPlayerController victim, string weapon, bool headshot, bool ranked)
+    {
+        if (string.IsNullOrWhiteSpace(Config.StatsUrl)) return;
+        string map = "", mode = "";
+        try { map = Server.MapName; mode = CurrentMode(); } catch { }
+        var kill = new
+        {
+            at = DateTime.UtcNow,
+            map,
+            mode,
+            weapon = weapon ?? "",
+            headshot,
+            ranked,
+            attacker_id = SteamIdOf(attacker).ToString(),
+            attacker_name = attacker.PlayerName ?? "",
+            attacker_bot = attacker.IsBot,
+            victim_id = SteamIdOf(victim).ToString(),
+            victim_name = victim.PlayerName ?? "",
+            victim_bot = victim.IsBot,
+        };
+        lock (_sync)
+        {
+            if (_pendingKills.Count < 5000) _pendingKills.Add(kill);
+            if (!attacker.IsBot) _dirty.Add(SteamIdOf(attacker));
+            if (!victim.IsBot) _dirty.Add(SteamIdOf(victim));
+        }
+    }
+
+    private void FlushStats()
+    {
+        if (string.IsNullOrWhiteSpace(Config.StatsUrl) || string.IsNullOrWhiteSpace(Config.StatsToken)) return;
+        if (Interlocked.Exchange(ref _sending, 1) == 1) return;
+        List<object> kills;
+        List<PlayerDto> players;
+        lock (_sync)
+        {
+            if (_pendingKills.Count == 0 && _dirty.Count == 0) { _sending = 0; return; }
+            kills = _pendingKills.Take(500).ToList();
+            _pendingKills.RemoveRange(0, kills.Count);
+            players = _dirty.Where(_players.ContainsKey).Select(id => _players[id])
+                .Select(p => new PlayerDto(p.SteamId.ToString(), p.Name, p.Points, p.Kills, p.Deaths, p.LastSeenUtc)).ToList();
+            _dirty.Clear();
+        }
+        string url = Config.StatsUrl, token = Config.StatsToken;
+        string body = JsonSerializer.Serialize(new { kills, players });
+        Task.Run(async () =>
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+                req.Headers.Add("x-ingest-token", token);
+                using var res = await Http.SendAsync(req);
+                if (!res.IsSuccessStatusCode) throw new Exception($"HTTP {(int)res.StatusCode}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("Statistik kunde inte skickas ({Msg}), försöker igen.", ex.Message);
+                lock (_sync)
+                {
+                    if (_pendingKills.Count + kills.Count <= 5000) _pendingKills.InsertRange(0, kills);
+                    foreach (var p in players) _dirty.Add(ulong.Parse(p.steam_id));
+                }
+            }
+            finally { Interlocked.Exchange(ref _sending, 0); }
+        });
     }
 
     private void SaveRankings()
