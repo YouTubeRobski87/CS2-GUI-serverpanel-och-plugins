@@ -194,7 +194,7 @@
 				<div class="flex gap-2">
 					<select class="input" bind:value={mapPick} disabled={!st.running}>
 						<option value="">{t('Välj karta…', 'Choose map…')}</option>
-						{#each activeMode?.maps ?? [] as m}<option value={m}>{m}</option>{/each}
+						{#each activeMode?.maps ?? [] as m}{@const [label, id] = m.split('=')}<option value={id ?? m}>{label}</option>{/each}
 					</select>
 					<button class="btn" disabled={!st.running || !mapPick || busy} onclick={() => changeMap(mapPick)}>{t('Byt', 'Change')}</button>
 				</div>

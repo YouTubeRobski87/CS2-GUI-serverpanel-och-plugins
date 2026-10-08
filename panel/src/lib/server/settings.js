@@ -142,7 +142,8 @@ export function saveMode(id, data) {
 		enable,
 		disable,
 		mariadb: !!data.mariadb,
-		maps: list(data.maps).filter((m) => /^[\w\-]+$/.test(m)),
+		// En karta per rad: namn (de_mirage), Workshop-ID (3143060725) eller namn=ID (am_headshot=3143060725).
+		maps: list(data.maps).map((m) => m.replace(/\s*=\s*/, '=')).filter((m) => /^([\w\-]+|\d{6,12}|[\w\-]+=\d{6,12})$/.test(m)),
 		custom: true
 	};
 	const next = { ...cur, modes: { ...cur.modes, [key]: mode } };

@@ -319,6 +319,7 @@
 							<div>
 								<div class="label mb-1.5">{t('Kartor i panelen (en per rad)', 'Maps in the panel (one per line)')}</div>
 								<textarea class="input mono text-[12px] min-h-28" bind:value={editing.maps} placeholder="de_mirage"></textarea>
+								<p class="text-xs text-dim mt-1">{t('Workshop-kartor: namn=ID, t.ex. am_headshot=3143060725', 'Workshop maps: name=ID, e.g. am_headshot=3143060725')}</p>
 							</div>
 						</div>
 						<p class="text-xs text-dim">{t('Sökvägar räknas från addons/counterstrikesharp, t.ex. plugins/K4-Arenas eller shared/DeathmatchAPI. Avstängda plugins flyttas till _panel_disabled i servermappen.', 'Paths are relative to addons/counterstrikesharp, e.g. plugins/K4-Arenas or shared/DeathmatchAPI. Disabled plugins are moved to _panel_disabled in the server folder.')}</p>
