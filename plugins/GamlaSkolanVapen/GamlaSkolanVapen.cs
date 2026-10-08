@@ -267,9 +267,19 @@ public class GamlaSkolanVapenPlugin : BasePlugin, IPluginConfig<VapenConfig>
 
     private void CloseMenu(CCSPlayerController player)
     {
-        if (_menus.Remove(player.Slot)) player.PrintToCenterHtml(" ");
+        if (_menus.Remove(player.Slot)) { _centerSent.Remove(player.Slot); player.PrintToCenterHtml(" ", 1); }
     }
 
+
+    // Overflow-skydd: skicka bara center-HTML när innehållet ändrats, annars högst en gång per sekund.
+    private readonly Dictionary<int, (string html, DateTime at)> _centerSent = new();
+    private void SendCenter(CCSPlayerController p, string html)
+    {
+        var now = DateTime.UtcNow;
+        if (_centerSent.TryGetValue(p.Slot, out var last) && last.html == html && (now - last.at).TotalSeconds < 1.0) return;
+        _centerSent[p.Slot] = (html, now);
+        p.PrintToCenterHtml(html, 2);
+    }
     private void OnTick()
     {
         if (_menus.Count == 0) return;
@@ -307,7 +317,7 @@ public class GamlaSkolanVapenPlugin : BasePlugin, IPluginConfig<VapenConfig>
         sb.Append(m.Back != null
             ? $"<font color='#9b917f' class='fontSize-s'>{T("W/S: bläddra · E: välj · A: tillbaka · R: stäng", "W/S: browse · E: select · A: back · R: close")}</font>"
             : $"<font color='#9b917f' class='fontSize-s'>{T("W/S: bläddra · E: välj · R: stäng", "W/S: browse · E: select · R: close")}</font>");
-        p.PrintToCenterHtml(sb.ToString());
+        SendCenter(p, sb.ToString());
     }
 
     private void OpenMain(CCSPlayerController player, int sel = 0)

@@ -167,11 +167,21 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         return HookResult.Continue;
     }
 
+
+    // Overflow-skydd: skicka bara center-HTML när innehållet ändrats, annars högst en gång per sekund.
+    private readonly Dictionary<int, (string html, DateTime at)> _centerSent = new();
+    private void SendCenter(CCSPlayerController p, string html)
+    {
+        var now = DateTime.UtcNow;
+        if (_centerSent.TryGetValue(p.Slot, out var last) && last.html == html && (now - last.at).TotalSeconds < 1.0) return;
+        _centerSent[p.Slot] = (html, now);
+        p.PrintToCenterHtml(html, 2);
+    }
     private void ShowMvp()
     {
         if (DateTime.UtcNow >= _mvpUntil) return;
         foreach (var h in Utilities.GetPlayers())
-            if (h != null && h.IsValid && !h.IsBot && !_menus.ContainsKey(h.Slot)) h.PrintToCenterHtml(_mvpHtml);
+            if (h != null && h.IsValid && !h.IsBot && !_menus.ContainsKey(h.Slot)) SendCenter(h, _mvpHtml);
     }
 
     private void NoWarmup()
@@ -263,7 +273,7 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         }
     }
 
-    private void Close(CCSPlayerController p) { if (_menus.Remove(p.Slot)) p.PrintToCenterHtml(" "); }
+    private void Close(CCSPlayerController p) { if (_menus.Remove(p.Slot)) { _centerSent.Remove(p.Slot); p.PrintToCenterHtml(" ", 1); } }
 
     private bool Save(CCSPlayerController p, MenuState m)
     {
@@ -337,6 +347,6 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
             sb.Append(i == m.Sel ? $"<font color='#7CFC00'>▶ {Esc(text)}</font><br>" : $"<font color='#ffffff'>{Esc(text)}</font><br>");
         }
         if (start + window < ItemCount) sb.Append("<font color='#9b917f'>▼</font>");
-        p.PrintToCenterHtml(sb.ToString());
+        SendCenter(p, sb.ToString());
     }
 }
