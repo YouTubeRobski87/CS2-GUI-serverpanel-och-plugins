@@ -26,7 +26,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.1.0";
+    public override string ModuleVersion => "1.2.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -73,6 +73,76 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         RegisterListener<Listeners.OnTick>(OnTick);
         // Ingen warmup i Zombie: CS2:s lägesconfigar slår på den vid varje kartstart, så vi avslutar den direkt.
         AddTimer(2f, NoWarmup, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
+    }
+
+    // ---------------------------------------------------------------- rundans MVP
+    private const float RoundEndDelay = 10f;   // sekunder mellan rundslut och nästa runda
+    private const float MvpShowSeconds = 8f;
+    private readonly Dictionary<int, (int kills, int damage)> _round = new();
+    private DateTime _mvpUntil = DateTime.MinValue;
+    private string _mvpHtml = "";
+
+    [GameEventHandler]
+    public HookResult OnRoundStartMvp(EventRoundStart e, GameEventInfo info)
+    {
+        _round.Clear();
+        _mvpUntil = DateTime.MinValue;
+        Server.ExecuteCommand($"mp_round_restart_delay {RoundEndDelay.ToString(CultureInfo.InvariantCulture)}");
+        return HookResult.Continue;
+    }
+
+    [GameEventHandler]
+    public HookResult OnHurtMvp(EventPlayerHurt e, GameEventInfo info)
+    {
+        var a = e.Attacker; var v = e.Userid;
+        if (a == null || !a.IsValid || v == null || !v.IsValid || a == v) return HookResult.Continue;
+        var cur = _round.GetValueOrDefault(a.Slot);
+        _round[a.Slot] = (cur.kills, cur.damage + Math.Max(0, e.DmgHealth));
+        return HookResult.Continue;
+    }
+
+    [GameEventHandler]
+    public HookResult OnDeathMvp(EventPlayerDeath e, GameEventInfo info)
+    {
+        var a = e.Attacker; var v = e.Userid;
+        if (a == null || !a.IsValid || v == null || !v.IsValid || a == v) return HookResult.Continue;
+        var cur = _round.GetValueOrDefault(a.Slot);
+        _round[a.Slot] = (cur.kills + 1, cur.damage);
+        return HookResult.Continue;
+    }
+
+    [GameEventHandler(HookMode.Post)]
+    public HookResult OnRoundEndMvp(EventRoundEnd e, GameEventInfo info)
+    {
+        var best = _round
+            .Select(kv => (p: Utilities.GetPlayerFromSlot(kv.Key), s: kv.Value))
+            .Where(x => x.p != null && x.p.IsValid && !x.p.IsHLTV)
+            .OrderByDescending(x => x.s.kills * 100 + x.s.damage)
+            .FirstOrDefault();
+        if (best.p == null || (best.s.kills == 0 && best.s.damage == 0)) return HookResult.Continue;
+
+        var p = best.p;
+        try { p.MVPs++; Utilities.SetStateChanged(p, "CCSPlayerController", "m_iMVPs"); } catch { }
+        var zombie = p.Team == CsTeam.Terrorist; // zombierna är T, människorna CT
+        var role = zombie ? T("Zombie", "Zombie") : T("Människa", "Human");
+        var stats = zombie
+            ? T($"{best.s.kills} smittade · {best.s.damage} skada", $"{best.s.kills} infected · {best.s.damage} damage")
+            : T($"{best.s.kills} kills · {best.s.damage} skada", $"{best.s.kills} kills · {best.s.damage} damage");
+        var name = Esc(p.PlayerName);
+        _mvpHtml =
+            $"<font class='fontSize-xl' color='#FFD700'>★ {T("RUNDANS MVP", "ROUND MVP")} ★</font><br>" +
+            $"<font class='fontSize-xl' color='{(zombie ? "#ff5a5a" : "#7CFC00")}'>{name}</font><br>" +
+            $"<font class='fontSize-m' color='#ffffff'>{role} · {Esc(stats)}</font>";
+        _mvpUntil = DateTime.UtcNow.AddSeconds(MvpShowSeconds);
+        Server.PrintToChatAll($" {P} {ChatColors.Gold}★ {T("Rundans MVP", "Round MVP")}:{ChatColors.Default} {(zombie ? ChatColors.Red : ChatColors.Green)}{p.PlayerName}{ChatColors.Default} – {stats}");
+        return HookResult.Continue;
+    }
+
+    private void ShowMvp()
+    {
+        if (DateTime.UtcNow >= _mvpUntil) return;
+        foreach (var h in Utilities.GetPlayers())
+            if (h != null && h.IsValid && !h.IsBot && !_menus.ContainsKey(h.Slot)) h.PrintToCenterHtml(_mvpHtml);
     }
 
     private void NoWarmup()
@@ -130,6 +200,7 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
 
     private void OnTick()
     {
+        ShowMvp();
         if (_menus.Count == 0) return;
         foreach (var slot in _menus.Keys.ToList())
         {
