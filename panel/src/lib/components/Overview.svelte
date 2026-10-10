@@ -117,7 +117,7 @@
 		</div>
 
 		<!-- lägesväljare -->
-		<div class="mt-6 grid sm:grid-cols-2 xl:grid-cols-3 gap-3 relative">
+		<div class="mt-6 grid sm:grid-cols-2 xl:grid-cols-4 gap-3 relative">
 			{#each st.modes as m}
 				<button
 					onclick={() => (selectedMode = m.id)}

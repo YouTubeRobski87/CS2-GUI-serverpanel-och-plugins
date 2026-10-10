@@ -30,7 +30,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     public void OnConfigParsed(LageConfig config) => Config = config;
 
     public override string ModuleName => "Gamla Skolan Lägesomröstning";
-    public override string ModuleVersion => "1.2.0";
+    public override string ModuleVersion => "1.3.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Vote for game mode: !mode / !lage";
 
@@ -43,6 +43,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
         ("retakes", "Retakes", "RetakesPlugin"),
         ("deathmatch", "Deathmatch", "Deathmatch"),
         ("arenas", "1v1 Arenas", "K4-Arenas"),
+        ("zombie", "Zombie", "ZombieMode"),
     };
 
     private string P => Config.Prefix

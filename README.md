@@ -227,6 +227,7 @@ Används men ingår inte i repot (egna licenser). Byggs mot samma CounterStrikeS
 | **RetakesPlugin** 3.1.1 | B3none/cs2-retakes | Svensk översättning som standard (`server-config/lang`), egen `retakes.cfg` med bottar |
 | **Instadefuse** | B3none/cs2-instadefuse | Svenska texter |
 | **Clutch Announce** | B3none/cs2-clutch-announce | Svenska texter, räknar 1v2 i stället för minst 1v3 (`MinPlayers = 2`) |
+| **Zombie Mode** (cs2-zombie-mode) | nvmxre/cs2-zombie-mode | Svensk översättning (`server-config/lang/ZombieMode/sv.json`), eget läge "Zombie" i panelen och omröstningen |
 
 ---
 
