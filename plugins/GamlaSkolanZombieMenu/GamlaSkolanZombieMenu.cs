@@ -46,7 +46,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.4.0";
+    public override string ModuleVersion => "1.5.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -242,12 +242,15 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
     public HookResult OnRoundEndMvp(EventRoundEnd e, GameEventInfo info)
     {
         ArmRestartWatchdog(e.Winner);
-        var best = _round
+        // Topp 3: MVP stort överst, tvåan och trean (silver och brons) under.
+        var top = _round
             .Select(kv => (p: Utilities.GetPlayerFromSlot(kv.Key), s: kv.Value))
-            .Where(x => x.p != null && x.p.IsValid && !x.p.IsHLTV)
+            .Where(x => x.p != null && x.p.IsValid && !x.p.IsHLTV && (x.s.kills > 0 || x.s.damage > 0))
             .OrderByDescending(x => x.s.kills * 100 + x.s.damage)
-            .FirstOrDefault();
-        if (best.p == null || (best.s.kills == 0 && best.s.damage == 0)) return HookResult.Continue;
+            .Take(3)
+            .ToList();
+        if (top.Count == 0) return HookResult.Continue;
+        var best = top[0];
 
         var p = best.p;
         try { p.MVPs++; Utilities.SetStateChanged(p, "CCSPlayerController", "m_iMVPs"); } catch { }
@@ -261,6 +264,15 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
             $"<font class='fontSize-xl' color='#FFD700'>★ {T("RUNDANS MVP", "ROUND MVP")}</font><br>" +
             $"<font class='fontSize-xl' color='{(zombie ? "#ff5a5a" : "#7CFC00")}'>{name}</font><br>" +
             $"<font class='fontSize-m' color='#ffffff'>{role} · {Esc(stats)}</font>";
+        string[] medal = { "", "#C0C0C0", "#CD7F32" };
+        for (int i = 1; i < top.Count; i++)
+        {
+            var (op, os) = top[i];
+            var oz = op!.Team == CsTeam.Terrorist;
+            var ostats = oz ? T($"{os.kills} smittade", $"{os.kills} infected") : $"{os.kills} kills";
+            _mvpHtml += $"<br><font class='fontSize-m' color='{medal[i]}'>{i + 1}. {Esc(op.PlayerName)}</font>" +
+                        $"<font class='fontSize-s' color='#cccccc'> – {Esc(ostats)} · {os.damage} {T("skada", "dmg")}</font>";
+        }
         _mvpUntil = DateTime.UtcNow.AddSeconds(MvpShowSeconds);
         Server.PrintToChatAll($" {P} {ChatColors.Gold}★ {T("Rundans MVP", "Round MVP")}:{ChatColors.Default} {(zombie ? ChatColors.Red : ChatColors.Green)}{p.PlayerName}{ChatColors.Default} – {stats}");
         return HookResult.Continue;
