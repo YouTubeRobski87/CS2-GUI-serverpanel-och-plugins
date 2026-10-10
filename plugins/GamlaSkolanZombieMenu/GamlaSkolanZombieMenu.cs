@@ -41,6 +41,8 @@ public class ZombieMenuConfig : BasePluginConfig
     // Vanliga banor (med stöd för bottar) som används när färre än MinHumansForZm spelare är inne.
     [JsonPropertyName("BotMaps")] public List<string> BotMaps { get; set; } = new() { "de_dust2", "cs_italy", "cs_office", "de_inferno", "de_mirage" };
     [JsonPropertyName("MinHumansForZm")] public int MinHumansForZm { get; set; } = 2;
+    // zm_-banor som vi redan vet klarar bottar. Används direkt när få spelare är inne.
+    [JsonPropertyName("KnownBotMaps")] public List<string> KnownBotMaps { get; set; } = new() { "zm_lila_panic" };
 }
 
 // Adminmeny för cs2-zombie-mode: !zm. Ändrar ZombieMode.json och kan be panelen starta om servern,
@@ -49,7 +51,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.7.0";
+    public override string ModuleVersion => "1.8.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -138,7 +140,9 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         {
             if (_botOk != null) return _botOk;
             try { _botOk = JsonSerializer.Deserialize<Dictionary<string, bool>>(File.ReadAllText(BotOkFile)); } catch { }
-            return _botOk ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            _botOk = new Dictionary<string, bool>(_botOk ?? new(), StringComparer.OrdinalIgnoreCase);
+            foreach (var m in Config.KnownBotMaps) if (!string.IsNullOrWhiteSpace(m)) _botOk[m.Trim()] = true;
+            return _botOk;
         }
     }
 
@@ -219,6 +223,20 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         var cur = Server.MapName;
         int i = maps.FindIndex(m => string.Equals(m.name, cur, StringComparison.OrdinalIgnoreCase));
         return maps[i < 0 ? Random.Shared.Next(maps.Count) : (i + 1) % maps.Count];
+    }
+
+    [GameEventHandler(HookMode.Post)]
+    public HookResult OnRoundEndToBotZm(EventRoundEnd e, GameEventInfo info)
+    {
+        if (!Config.MapRotation || _switching || OnZmMap) return HookResult.Continue;
+        int humans = HumanCount();
+        if (humans == 0 || humans >= Math.Max(1, Config.MinHumansForZm)) return HookResult.Continue;
+        var pick = PickOther(ZmWithBots);
+        if (pick == null) return HookResult.Continue;
+        var n = pick.Value;
+        Server.PrintToChatAll($" {P} {T($"Byter till zombiebanan {ChatColors.Green}{n.name}{ChatColors.Default} (bottar funkar där).", $"Switching to the zombie map {ChatColors.Green}{n.name}{ChatColors.Default} (bots work there).")}");
+        AddTimer(4f, () => SwitchTo(n), CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
+        return HookResult.Continue;
     }
 
     [ConsoleCommand("css_zmbots", "Show which zombie maps support bots")]
