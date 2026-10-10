@@ -32,7 +32,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     public void OnConfigParsed(LageConfig config) => Config = config;
 
     public override string ModuleName => "Gamla Skolan Lägesomröstning";
-    public override string ModuleVersion => "1.5.0";
+    public override string ModuleVersion => "1.5.1";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Vote for game mode: !mode / !lage";
 
@@ -94,6 +94,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     }
 
     private int _missingChecks;
+    private int _lowChecks;
     private int _wanted; // antal bottar vi vill ha just nu (0 = lägets egna inställningar gäller)
 
     private int TargetBots => Math.Clamp(Config.IdleBots, 1, 20);
@@ -143,9 +144,17 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
             if (!_idle && _wanted == 0) SaveModeBotCvars(); // lägets egna värden, innan vi ändrar något
 
             // Tom server: N bottar. Få spelare: fyll upp till N totalt, om läget självt skulle ge färre.
+            // Vi räknar de bottar som faktiskt finns: lägets inställningar kan se ut att ge bottar
+            // (t.ex. quota 10 fill i Zombie) men i praktiken ge noll.
             int wanted = 0;
             if (humans == 0) wanted = TargetBots;
-            else if (humans < TargetBots && FillAllowed() && ModeBots(humans) < TargetBots - humans) wanted = TargetBots - humans;
+            else if (humans < TargetBots && FillAllowed())
+            {
+                if (_wanted > 0) wanted = TargetBots - humans;                // vi fyller redan – fortsätt
+                else if (BotCount() < TargetBots - humans && ++_lowChecks >= 2) // för få i ~10 s
+                    wanted = TargetBots - humans;
+            }
+            if (wanted > 0 || humans >= TargetBots || humans == 0) _lowChecks = 0;
 
             if (wanted > 0)
             {
