@@ -49,7 +49,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.6.0";
+    public override string ModuleVersion => "1.7.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -124,25 +124,91 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
     {
         _switching = false;
         _noBotChecks = 0;
+        _emptyChecks = 0;
     }
 
-    // Var 10:e sekund: sitter få spelare på en zm_-bana där bottarna inte kommer in, byt till en vanlig bana.
+    // ---- vilka zm_-banor klarar bottar? Servern testar själv och sparar svaret i zm_botmaps.json.
+    private int _emptyChecks;
+    private Dictionary<string, bool>? _botOk;
+    private string BotOkFile => Path.Combine(ModuleDirectory, "zm_botmaps.json");
+
+    private Dictionary<string, bool> BotOk
+    {
+        get
+        {
+            if (_botOk != null) return _botOk;
+            try { _botOk = JsonSerializer.Deserialize<Dictionary<string, bool>>(File.ReadAllText(BotOkFile)); } catch { }
+            return _botOk ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private void MarkBots(string map, bool ok)
+    {
+        if (BotOk.TryGetValue(map, out var cur) && cur == ok) return;
+        if (cur && !ok) return; // har funkat förut – en tom stund ändrar inte det
+        BotOk[map] = ok;
+        try { File.WriteAllText(BotOkFile, JsonSerializer.Serialize(BotOk, new JsonSerializerOptions { WriteIndented = true })); } catch { }
+        Logger.LogInformation("Zombie: {Map} {Res}", map, ok ? "klarar bottar" : "klarar INTE bottar (inget navigeringsnät)");
+    }
+
+    private List<(string name, string id)> ZmWithBots => ZmMaps.Where(m => BotOk.TryGetValue(m.name, out var ok) && ok).ToList();
+    private List<(string name, string id)> ZmUntested => ZmMaps.Where(m => !BotOk.ContainsKey(m.name)).ToList();
+
+    private (string name, string id)? PickOther(List<(string name, string id)> list)
+    {
+        var l = list.Where(m => !string.Equals(m.name, Server.MapName, StringComparison.OrdinalIgnoreCase)).ToList();
+        return l.Count == 0 ? null : l[Random.Shared.Next(l.Count)];
+    }
+
+    private (string name, string id) BotFallback()
+    {
+        var good = PickOther(ZmWithBots);
+        if (good != null) return good.Value;
+        var bm = BotMaps.Where(m => !string.Equals(m, Server.MapName, StringComparison.OrdinalIgnoreCase)).ToList();
+        return (bm.Count > 0 ? bm[Random.Shared.Next(bm.Count)] : "de_dust2", "");
+    }
+
+    // Var 10:e sekund.
     private void BotlessCheck()
     {
-        if (!Config.MapRotation || _switching || !OnZmMap || BotMaps.Count == 0) { _noBotChecks = 0; return; }
-        if (HumanCount() >= Math.Max(1, Config.MinHumansForZm) || BotCountNow() > 0) { _noBotChecks = 0; return; }
-        if (++_noBotChecks < 3) return; // ~30 s
-        var pick = BotMaps[Random.Shared.Next(BotMaps.Count)];
-        Logger.LogInformation("Zombie: {Map} har inga bottar och för få spelare – byter till {Pick}", Server.MapName, pick);
-        if (HumanCount() > 0)
-            Server.PrintToChatAll($" {P} {T($"För få spelare för zombiebanorna (bottar funkar inte där) – byter till {ChatColors.Green}{pick}{ChatColors.Default} med bottar.", $"Not enough players for the zombie maps (bots can't play them) – switching to {ChatColors.Green}{pick}{ChatColors.Default} with bots.")}");
-        AddTimer(4f, () => SwitchTo((pick, "")), CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
+        if (!Config.MapRotation || _switching) return;
+        int humans = HumanCount(), bots = BotCountNow();
+        int min = Math.Max(1, Config.MinHumansForZm);
+
+        if (OnZmMap)
+        {
+            if (bots > 0) { MarkBots(Server.MapName, true); _noBotChecks = 0; return; }
+            if (humans >= min) { _noBotChecks = 0; return; } // tillräckligt många riktiga spelare – bottar behövs inte
+            bool knownGood = BotOk.TryGetValue(Server.MapName, out var ok) && ok;
+            if (++_noBotChecks < (knownGood ? 6 : 3)) return; // ~30 s (60 s för en bana som funkat förut)
+            MarkBots(Server.MapName, false);
+            var pick = humans == 0 && ZmUntested.Count > 0 ? PickOther(ZmUntested)!.Value : BotFallback();
+            if (humans > 0)
+                Server.PrintToChatAll($" {P} {T($"Bottar funkar inte på den här banan – byter till {ChatColors.Green}{pick.name}{ChatColors.Default}.", $"Bots can't play this map – switching to {ChatColors.Green}{pick.name}{ChatColors.Default}.")}");
+            AddTimer(4f, () => SwitchTo(pick), CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
+            return;
+        }
+
+        // Vanlig bana och tom server: testa en otestad zm_-bana, eller gå till en som klarar bottar.
+        if (humans > 0) { _emptyChecks = 0; return; }
+        if (++_emptyChecks < 2) return;
+        var next = PickOther(ZmUntested) ?? PickOther(ZmWithBots);
+        if (next == null) return;
+        Logger.LogInformation("Zombie: tom server – {What} {Map}", BotOk.ContainsKey(next.Value.name) ? "byter till" : "testar om bottar funkar på", next.Value.name);
+        SwitchTo(next.Value);
     }
 
     private (string name, string id)? NextMap()
     {
-        if (HumanCount() < Math.Max(1, Config.MinHumansForZm))
+        int min = Math.Max(1, Config.MinHumansForZm);
+        if (HumanCount() < min)
         {
+            var good = ZmWithBots;
+            if (good.Count > 0)
+            {
+                int k = good.FindIndex(m => string.Equals(m.name, Server.MapName, StringComparison.OrdinalIgnoreCase));
+                return good[k < 0 ? Random.Shared.Next(good.Count) : (k + 1) % good.Count];
+            }
             var bm = BotMaps;
             if (bm.Count == 0) return null;
             int j = bm.FindIndex(m => string.Equals(m, Server.MapName, StringComparison.OrdinalIgnoreCase));
@@ -153,6 +219,13 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         var cur = Server.MapName;
         int i = maps.FindIndex(m => string.Equals(m.name, cur, StringComparison.OrdinalIgnoreCase));
         return maps[i < 0 ? Random.Shared.Next(maps.Count) : (i + 1) % maps.Count];
+    }
+
+    [ConsoleCommand("css_zmbots", "Show which zombie maps support bots")]
+    public void OnZmBots(CCSPlayerController? player, CommandInfo cmd)
+    {
+        var lines = ZmMaps.Select(m => $"{m.name}: {(BotOk.TryGetValue(m.name, out var ok) ? (ok ? T("bottar OK", "bots OK") : T("inga bottar", "no bots")) : T("ej testad", "not tested"))}");
+        foreach (var l in lines) { if (player == null) Console.WriteLine(l); else player.PrintToChat($" {P} {l}"); }
     }
 
     private bool ModeSwitchRequested()
