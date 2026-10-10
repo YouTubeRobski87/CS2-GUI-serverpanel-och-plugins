@@ -17,12 +17,14 @@ public class RankConfig : BasePluginConfig
     [JsonPropertyName("MinimumHumanPlayers")] public int MinimumHumanPlayers { get; set; } = 2;
     [JsonPropertyName("TopCount")] public int TopCount { get; set; } = 10;
     [JsonPropertyName("ShowPointMessages")] public bool ShowPointMessages { get; set; } = true;
+    // "en" eller "sv"
+    [JsonPropertyName("Language")] public string Language { get; set; } = "en";
 }
 
 public class PlayerRank
 {
     public ulong SteamId { get; set; }
-    public string Name { get; set; } = "Okand";
+    public string Name { get; set; } = "Unknown";
     public int Points { get; set; }
     public int Kills { get; set; }
     public int Deaths { get; set; }
@@ -33,15 +35,17 @@ public class PlayerRank
 public class GamlaSkolanRankPlugin : BasePlugin, IPluginConfig<RankConfig>
 {
     public override string ModuleName => "Gamla Skolan Rank";
-    public override string ModuleVersion => "1.1.0";
+    public override string ModuleVersion => "1.2.0";
     public override string ModuleAuthor => "Gamla Skolan";
-    public override string ModuleDescription => "Smal persistent rank for K4-Arenas och Deathmatch.";
+    public override string ModuleDescription => "Simple persistent rank for K4-Arenas and Deathmatch.";
 
     private readonly object _sync = new();
     private Dictionary<ulong, PlayerRank> _players = new();
     private string _dataFile = string.Empty;
 
     public RankConfig Config { get; set; } = new();
+    private bool Sv => string.Equals(Config.Language, "sv", StringComparison.OrdinalIgnoreCase);
+    private string T(string sv, string en) => Sv ? sv : en;
 
     public void OnConfigParsed(RankConfig config)
     {
@@ -108,12 +112,12 @@ public class GamlaSkolanRankPlugin : BasePlugin, IPluginConfig<RankConfig>
             {
                 if (killer != null)
                 {
-                    attacker.PrintToChat($" \x04[Rank]\x01 +{gain} poang • {Tier(killer.Points)} • {killer.Points}p");
+                    attacker.PrintToChat($" \x04[Rank]\x01 +{gain} {T("poäng", "points")} • {Tier(killer.Points)} • {killer.Points}p");
                     attacker.PrintToCenter($"+{gain} RANK");
                 }
                 if (dead != null)
                 {
-                    victim.PrintToChat($" \x02[Rank]\x01 -{loss} poang • {Tier(dead.Points)} • {dead.Points}p");
+                    victim.PrintToChat($" \x02[Rank]\x01 -{loss} {T("poäng", "points")} • {Tier(dead.Points)} • {dead.Points}p");
                     victim.PrintToCenter($"-{loss} RANK");
                 }
             }
@@ -121,7 +125,7 @@ public class GamlaSkolanRankPlugin : BasePlugin, IPluginConfig<RankConfig>
         return HookResult.Continue;
     }
 
-    [ConsoleCommand("css_rank", "Visa din rank")]
+    [ConsoleCommand("css_rank", "Show your rank")]
     [CommandHelper(whoCanExecute: CommandUsage.CLIENT_ONLY)]
     public void OnRankCommand(CCSPlayerController? player, CommandInfo command)
     {
@@ -136,7 +140,7 @@ public class GamlaSkolanRankPlugin : BasePlugin, IPluginConfig<RankConfig>
         }
     }
 
-    [ConsoleCommand("css_top", "Visa topplistan")]
+    [ConsoleCommand("css_top", "Show the leaderboard")]
     [CommandHelper(whoCanExecute: CommandUsage.CLIENT_ONLY)]
     public void OnTopCommand(CCSPlayerController? player, CommandInfo command)
     {
@@ -144,10 +148,10 @@ public class GamlaSkolanRankPlugin : BasePlugin, IPluginConfig<RankConfig>
         lock (_sync)
         {
             var top = OrderedPlayers().Take(Config.TopCount).ToList();
-            player!.PrintToChat(" \x04[Rank]\x01 Topplista");
+            player!.PrintToChat($" \x04[Rank]\x01 {T("Topplista", "Leaderboard")}");
             if (top.Count == 0)
             {
-                player.PrintToChat(" \x01Ingen har fatt rankpoang annu.");
+                player.PrintToChat($" \x01{T("Ingen har fått rankpoäng ännu.", "Nobody has earned rank points yet.")}");
                 return;
             }
             for (int i = 0; i < top.Count; i++)

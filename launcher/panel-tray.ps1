@@ -1,4 +1,5 @@
-﻿# Gamla Skolan – Serverpanel som program.
+﻿# Gamla Skolan – CS2 server panel as a desktop program (tray icon + own window).
+# Gamla Skolan – Serverpanel som program.
 # Startar panelen osynligt i bakgrunden, öppnar den i ett eget fönster (utan webbläsarflikar)
 # och lägger en ikon nere vid klockan med Öppna / Starta om / Avsluta.
 # Startas av "Gamla Skolan Panel.vbs" (genvägen på skrivbordet), så inget svart fönster syns.
@@ -12,6 +13,16 @@ $LogFile = Join-Path $Root 'panel-data\panel.log'
 $IconFile = Join-Path $Root 'gamla-skolan.ico'
 $TrayLog = Join-Path $Root 'panel-data\tray.log'
 New-Item -ItemType Directory -Force -Path (Join-Path $Root 'panel-data') | Out-Null
+# Språk: följer panelens inställning (panel-data/settings.json). Äldre installationer utan språkval är svenska.
+$SettingsFile = Join-Path $Root 'panel-data\settings.json'
+$script:Lang = 'en'
+try {
+    if (Test-Path $SettingsFile) {
+        $j = Get-Content $SettingsFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($j.lang) { $script:Lang = $j.lang } else { $script:Lang = 'sv' }
+    }
+} catch {}
+function T($sv, $en) { if ($script:Lang -eq 'sv') { return $sv } else { return $en } }
 function Log($msg) { try { Add-Content -Path $TrayLog -Value ("{0:yyyy-MM-dd HH:mm:ss}  {1}" -f (Get-Date), $msg) -Encoding UTF8 } catch {} }
 Log "Startar (PowerShell $($PSVersionTable.PSVersion))"
 trap { Log "FEL: $($_.Exception.Message) (rad $($_.InvocationInfo.ScriptLineNumber))"; continue }
@@ -39,7 +50,7 @@ function Start-Panel {
     if (Test-PanelRunning) { Log 'Panelen kör redan på port 8027'; return $true }
     $node = (Get-Command node -ErrorAction SilentlyContinue).Source
     if (-not $node) {
-        [System.Windows.Forms.MessageBox]::Show("Hittar inte Node.js. Installera det från https://nodejs.org och försök igen.", "Gamla Skolan Panel", 'OK', 'Error') | Out-Null
+        [System.Windows.Forms.MessageBox]::Show((T "Hittar inte Node.js. Installera det från https://nodejs.org och försök igen." "Node.js was not found. Install it from https://nodejs.org (LTS) and try again."), "Gamla Skolan Panel", 'OK', 'Error') | Out-Null
         return $false
     }
     New-Item -ItemType Directory -Force -Path (Split-Path $LogFile) | Out-Null
@@ -58,7 +69,7 @@ function Start-Panel {
         Start-Sleep -Milliseconds 250
         if (Test-PanelRunning) { return $true }
     }
-    [System.Windows.Forms.MessageBox]::Show("Panelen startade inte. Se loggen:`n$LogFile", "Gamla Skolan Panel", 'OK', 'Error') | Out-Null
+    [System.Windows.Forms.MessageBox]::Show((T "Panelen startade inte. Se loggen:`n$LogFile" "The panel did not start. See the log:`n$LogFile"), "Gamla Skolan Panel", 'OK', 'Error') | Out-Null
     return $false
 }
 
@@ -101,7 +112,7 @@ function Update-Shortcuts {
             $sc.WorkingDirectory = $Root
             $sc.IconLocation = "$IconFile,0"
             $sc.WindowStyle = 7
-            $sc.Description = 'Gamla Skolan – CS2 serverpanel'
+            $sc.Description = 'Gamla Skolan – CS2 server panel'
             $sc.Save()
         }
         Log 'Genvägar uppdaterade (skrivbord + Start-menyn)'
@@ -123,15 +134,15 @@ Update-Shortcuts
 # ---- ikon vid klockan ----
 $tray = New-Object System.Windows.Forms.NotifyIcon
 if (Test-Path $IconFile) { $tray.Icon = New-Object System.Drawing.Icon $IconFile } else { $tray.Icon = [System.Drawing.SystemIcons]::Application }
-$tray.Text = 'Gamla Skolan – Serverpanel'
+$tray.Text = 'Gamla Skolan – CS2 Panel'
 $tray.Visible = $true
 
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
-$itemOpen = $menu.Items.Add('Öppna panelen')
+$itemOpen = $menu.Items.Add((T 'Öppna panelen' 'Open the panel'))
 $itemOpen.Font = New-Object System.Drawing.Font($itemOpen.Font, [System.Drawing.FontStyle]::Bold)
-$itemRestart = $menu.Items.Add('Starta om panelen')
+$itemRestart = $menu.Items.Add((T 'Starta om panelen' 'Restart the panel'))
 [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
-$itemExit = $menu.Items.Add('Avsluta panelen')
+$itemExit = $menu.Items.Add((T 'Avsluta panelen' 'Quit the panel'))
 $tray.ContextMenuStrip = $menu
 
 $itemOpen.add_Click({ if (Start-Panel) { Open-PanelWindow } })
@@ -139,7 +150,7 @@ $tray.add_DoubleClick({ if (Start-Panel) { Open-PanelWindow } })
 $itemRestart.add_Click({
     Stop-Panel
     Start-Sleep -Milliseconds 800
-    if (Start-Panel) { $tray.ShowBalloonTip(3000, 'Gamla Skolan', 'Panelen är omstartad.', 'Info') }
+    if (Start-Panel) { $tray.ShowBalloonTip(3000, 'Gamla Skolan', (T 'Panelen är omstartad.' 'The panel has restarted.'), 'Info') }
 })
 $itemExit.add_Click({
     Close-PanelWindows
@@ -157,19 +168,25 @@ $timer.add_Tick({
     try {
         $st = Invoke-RestMethod -Uri "$Url/api/state" -TimeoutSec 2
         $running = [bool]$st.running
-        if ($running) { $tray.Text = 'Gamla Skolan – CS2-servern är igång' } else { $tray.Text = 'Gamla Skolan – CS2-servern är avstängd' }
+        if ($st.lang -and $st.lang -ne $script:Lang) {
+            $script:Lang = $st.lang
+            $itemOpen.Text = (T 'Öppna panelen' 'Open the panel')
+            $itemRestart.Text = (T 'Starta om panelen' 'Restart the panel')
+            $itemExit.Text = (T 'Avsluta panelen' 'Quit the panel')
+        }
+        if ($running) { $tray.Text = (T 'Gamla Skolan – CS2-servern är igång' 'Gamla Skolan – CS2 server is running') } else { $tray.Text = (T 'Gamla Skolan – CS2-servern är avstängd' 'Gamla Skolan – CS2 server is offline') }
         if ($script:lastRunning -ne $null -and $script:lastRunning -ne $running) {
-            if ($running) { $tray.ShowBalloonTip(4000, 'Gamla Skolan', 'CS2-servern är igång.', 'Info') }
-            else { $tray.ShowBalloonTip(4000, 'Gamla Skolan', 'CS2-servern har stängts.', 'Warning') }
+            if ($running) { $tray.ShowBalloonTip(4000, 'Gamla Skolan', (T 'CS2-servern är igång.' 'The CS2 server is running.'), 'Info') }
+            else { $tray.ShowBalloonTip(4000, 'Gamla Skolan', (T 'CS2-servern har stängts.' 'The CS2 server has stopped.'), 'Warning') }
         }
         $script:lastRunning = $running
     } catch {
-        $tray.Text = 'Gamla Skolan – panelen svarar inte'
+        $tray.Text = (T 'Gamla Skolan – panelen svarar inte' 'Gamla Skolan – panel not responding')
     }
 })
 $timer.Start()
 
-$tray.ShowBalloonTip(3000, 'Gamla Skolan', 'Panelen körs här nere vid klockan. Högerklicka för att avsluta.', 'Info')
+$tray.ShowBalloonTip(3000, 'Gamla Skolan', (T 'Panelen körs här nere vid klockan. Högerklicka för att avsluta.' 'The panel runs down here by the clock. Right-click to quit.'), 'Info')
 [System.Windows.Forms.Application]::Run()
 
 $timer.Stop()

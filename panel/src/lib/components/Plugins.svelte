@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
 	import Icon from './Icon.svelte';
+	import { t } from '$lib/i18n.svelte.js';
 
 	let { st, ctx } = $props();
 	let data = $state(null);
@@ -20,7 +21,7 @@
 		busy = true;
 		try {
 			await api('plugin', { action, name });
-			ctx.toast(`${name}: ${{ reload: 'omladdad', unload: 'urladdad', load: 'laddad' }[action]}`);
+			ctx.toast(`${name}: ${{ reload: t('omladdad', 'reloaded'), unload: t('urladdad', 'unloaded'), load: t('laddad', 'loaded') }[action]}`);
 			setTimeout(load, 800);
 		} catch (e) {
 			ctx.toast(e.message, 'error');
@@ -40,14 +41,14 @@
 <div class="space-y-4">
 	<div class="flex items-center gap-4">
 		<h1 class="font-display font-extrabold text-2xl tracking-tight">Plugins</h1>
-		<button class="btn btn-sm ml-auto" onclick={load}><Icon name="refresh" class="size-4" /> Uppdatera</button>
+		<button class="btn btn-sm ml-auto" onclick={load}><Icon name="refresh" class="size-4" /> {t('Uppdatera', 'Refresh')}</button>
 	</div>
 
 	{#if !data}
-		<div class="text-muted">Laddar…</div>
+		<div class="text-muted">{t('Laddar…', 'Loading…')}</div>
 	{:else}
 		{#if st.running && !data.liveOk}
-			<div class="card p-4 text-warn text-sm">Väntar på pluginlistan från bryggan… (om det inte dyker upp: starta om servern från Översikt).</div>
+			<div class="card p-4 text-warn text-sm">{t('Väntar på pluginlistan från bryggan… (om det inte dyker upp: starta om servern från Översikt).', 'Waiting for the plugin list from the bridge… (if it doesn’t show up: restart the server from Overview).')}</div>
 		{/if}
 		<div class="grid md:grid-cols-2 gap-3">
 			{#each data.installed as dir}
@@ -63,33 +64,33 @@
 						</div>
 					</div>
 					{#if !st.running}
-						<span class="label !text-[10px]">Installerad</span>
+						<span class="label !text-[10px]">{t('Installerad', 'Installed')}</span>
 					{:else if l}
-						<span class="label !text-[10px] {l.state === 'loaded' ? '!text-ok' : '!text-warn'}">{l.state === 'loaded' ? 'Laddad' : l.state === 'unloaded' ? 'Avlagd' : l.state}</span>
+						<span class="label !text-[10px] {l.state === 'loaded' ? '!text-ok' : '!text-warn'}">{l.state === 'loaded' ? t('Laddad', 'Loaded') : l.state === 'unloaded' ? t('Avlagd', 'Unloaded') : l.state}</span>
 						{#if dir === 'GamlaSkolanPanelBridge'}
-							<span class="text-xs text-dim">panelens brygga</span>
+							<span class="text-xs text-dim">{t('panelens brygga', 'panel bridge')}</span>
 						{:else if l.state !== 'loaded'}
-							<button class="btn btn-sm" disabled={busy} onclick={() => act('load', dir)}><Icon name="play" class="size-3.5" /> Ladda</button>
+							<button class="btn btn-sm" disabled={busy} onclick={() => act('load', dir)}><Icon name="play" class="size-3.5" /> {t('Ladda', 'Load')}</button>
 						{:else}
-						<button class="btn btn-sm" disabled={busy} onclick={() => act('reload', dir)} title="Ladda om"><Icon name="refresh" class="size-3.5" /></button>
-						<button class="btn btn-sm btn-danger" disabled={busy} onclick={() => act('unload', dir)} title="Ladda ur"><Icon name="stop" class="size-3.5" /></button>
+						<button class="btn btn-sm" disabled={busy} onclick={() => act('reload', dir)} title={t('Ladda om', 'Reload')}><Icon name="refresh" class="size-3.5" /></button>
+						<button class="btn btn-sm btn-danger" disabled={busy} onclick={() => act('unload', dir)} title={t('Ladda ur', 'Unload')}><Icon name="stop" class="size-3.5" /></button>
 						{/if}
 					{:else}
-						<span class="label !text-[10px] !text-warn">Ej laddad</span>
-						<button class="btn btn-sm" disabled={busy} onclick={() => act('load', dir)}><Icon name="play" class="size-3.5" /> Ladda</button>
+						<span class="label !text-[10px] !text-warn">{t('Ej laddad', 'Not loaded')}</span>
+						<button class="btn btn-sm" disabled={busy} onclick={() => act('load', dir)}><Icon name="play" class="size-3.5" /> {t('Ladda', 'Load')}</button>
 					{/if}
 				</div>
 			{/each}
 		</div>
 
 		{#if data.disabled.length}
-			<div class="label pt-4">Avstängda av lägesbytet</div>
+			<div class="label pt-4">{t('Avstängda av lägesbytet', 'Disabled by the mode switch')}</div>
 			<div class="flex flex-wrap gap-2">
 				{#each data.disabled as d}
 					<span class="px-3 py-1.5 rounded-lg border border-line text-sm text-muted">{d}</span>
 				{/each}
 			</div>
-			<p class="text-xs text-dim">De slås på automatiskt när du startar ett läge som behöver dem.</p>
+			<p class="text-xs text-dim">{t('De slås på automatiskt när du startar ett läge som behöver dem.', 'They are turned back on automatically when you start a mode that needs them.')}</p>
 		{/if}
 	{/if}
 </div>

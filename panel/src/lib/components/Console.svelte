@@ -2,6 +2,7 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { api } from '$lib/api.js';
 	import Icon from './Icon.svelte';
+	import { t } from '$lib/i18n.svelte.js';
 
 	let { st, ctx } = $props();
 
@@ -19,13 +20,13 @@
 	let timer;
 	let sending = $state(false);
 
-	const quick = [
+	const quick = () => [
 		{ label: 'status', cmd: 'status' },
 		{ label: 'Plugins', cmd: 'css_plugins list' },
-		{ label: 'Starta om match', cmd: 'mp_restartgame 1' },
-		{ label: 'Lägg till bott', cmd: 'bot_add' },
-		{ label: 'Kicka bottar', cmd: 'bot_kick' },
-		{ label: 'Avsluta warmup', cmd: 'mp_warmup_end' }
+		{ label: t('Starta om match', 'Restart match'), cmd: 'mp_restartgame 1' },
+		{ label: t('Lägg till bott', 'Add bot'), cmd: 'bot_add' },
+		{ label: t('Kicka bottar', 'Kick bots'), cmd: 'bot_kick' },
+		{ label: t('Avsluta warmup', 'End warmup'), cmd: 'mp_warmup_end' }
 	];
 
 	async function poll() {
@@ -88,9 +89,9 @@
 		try {
 			const r = await api('rcon', { command });
 			const out = (r.output || '').trim();
-			for (const l of (out || '(inget svar)').split(/\r?\n/)) lines = [...lines, { t: l, kind: 'cmd' }];
+			for (const l of (out || t('(inget svar)', '(no response)')).split(/\r?\n/)) lines = [...lines, { t: l, kind: 'cmd' }];
 		} catch (e) {
-			lines = [...lines, { t: `Fel: ${e.message}`, kind: 'error' }];
+			lines = [...lines, { t: t(`Fel: ${e.message}`, `Error: ${e.message}`), kind: 'error' }];
 		} finally {
 			sending = false;
 			if (c === cmd) cmd = '';
@@ -133,17 +134,17 @@
 <div class="flex flex-col gap-4 h-[calc(100vh-9.5rem)] min-h-[480px]">
 	<div class="flex flex-wrap items-center gap-3">
 		<div class="flex rounded-lg border border-line-2 overflow-hidden">
-			{#each [['server', 'Spellogg'], ['plugins', 'Pluginlogg']] as [id, label]}
+			{#each [['server', t('Spellogg', 'Game log')], ['plugins', t('Pluginlogg', 'Plugin log')]] as [id, label]}
 				<button class="px-4 py-2 text-sm font-display font-semibold {source === id ? 'bg-amber text-ink' : 'text-muted hover:text-text'}" onclick={() => switchSource(id)}>{label}</button>
 			{/each}
 		</div>
-		<input class="input !w-56" placeholder="Filtrera…" bind:value={filter} />
+		<input class="input !w-56" placeholder={t('Filtrera…', 'Filter…')} bind:value={filter} />
 		<label class="flex items-center gap-2 text-sm text-muted cursor-pointer">
-			<input type="checkbox" bind:checked={hideHits} class="accent-amber-500" /> Dölj träffar och köp
+			<input type="checkbox" bind:checked={hideHits} class="accent-amber-500" /> {t('Dölj träffar och köp', 'Hide hits and purchases')}
 		</label>
-		<span class="text-xs text-dim mono truncate">{file ?? 'ingen loggfil'}</span>
+		<span class="text-xs text-dim mono truncate">{file ?? t('ingen loggfil', 'no log file')}</span>
 		{#if !autoscroll}
-			<button class="btn btn-sm ml-auto" onclick={() => { autoscroll = true; box?.scrollTo({ top: box.scrollHeight }); }}>↓ Till senaste</button>
+			<button class="btn btn-sm ml-auto" onclick={() => { autoscroll = true; box?.scrollTo({ top: box.scrollHeight }); }}>↓ {t('Till senaste', 'Jump to latest')}</button>
 		{/if}
 	</div>
 
@@ -152,21 +153,21 @@
 			<div class="whitespace-pre-wrap break-all {colors[l.kind]}">{pretty(l.t)}</div>
 		{:else}
 			<div class="text-dim">
-				Väntar på loggrader… Skriv ett kommando nedan så visas svaret här.
+				{t('Väntar på loggrader… Skriv ett kommando nedan så visas svaret här.', 'Waiting for log lines… Type a command below and the response will appear here.')}
 			</div>
 		{/each}
 	</div>
 
 	<div class="flex flex-wrap gap-2">
-		{#each quick as q}
+		{#each quick() as q}
 			<button class="btn btn-sm" disabled={!st.running || sending} onclick={() => send(q.cmd)}>{q.label}</button>
 		{/each}
 	</div>
 	<form class="flex gap-2" onsubmit={(e) => { e.preventDefault(); send(); }}>
 		<div class="relative flex-1">
 			<span class="absolute left-3 top-1/2 -translate-y-1/2 text-amber mono">›</span>
-			<input class="input mono !pl-7" placeholder={st.running ? 'Serverkommando, t.ex. mp_timelimit 30 (↑ för historik)' : 'Servern är avstängd'} bind:value={cmd} onkeydown={keydown} disabled={!st.running} />
+			<input class="input mono !pl-7" placeholder={st.running ? t('Serverkommando, t.ex. mp_timelimit 30 (↑ för historik)', 'Server command, e.g. mp_timelimit 30 (↑ for history)') : t('Servern är avstängd', 'Server is offline')} bind:value={cmd} onkeydown={keydown} disabled={!st.running} />
 		</div>
-		<button class="btn btn-primary" disabled={!st.running || sending || !cmd.trim()}><Icon name="send" class="size-4" /> Skicka</button>
+		<button class="btn btn-primary" disabled={!st.running || sending || !cmd.trim()}><Icon name="send" class="size-4" /> {t('Skicka', 'Send')}</button>
 	</form>
 </div>

@@ -2,6 +2,7 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { api } from '$lib/api.js';
 	import Icon from './Icon.svelte';
+	import { t } from '$lib/i18n.svelte.js';
 
 	let { st, update, ctx } = $props();
 	let job = $state(null);
@@ -38,7 +39,7 @@
 	async function run() {
 		try {
 			await api('update', { validate });
-			ctx.toast('Uppdateringen har startat');
+			ctx.toast(t('Uppdateringen har startat', 'The update has started'));
 			pollJob();
 		} catch (e) {
 			ctx.toast(e.message, 'error');
@@ -50,11 +51,11 @@
 		const m = l?.match(/progress:\s*([\d.]+)/);
 		return m ? Number(m[1]) : null;
 	});
-	const date = (t) => (t ? new Date(t).toLocaleString('sv-SE', { dateStyle: 'medium', timeStyle: 'short' }) : '–');
+	const date = (d) => (d ? new Date(d).toLocaleString('sv-SE', { dateStyle: 'medium', timeStyle: 'short' }) : '–');
 </script>
 
 <div class="space-y-6">
-	<h1 class="font-display font-extrabold text-2xl tracking-tight">Uppdatering</h1>
+	<h1 class="font-display font-extrabold text-2xl tracking-tight">{t('Uppdatering', 'Update')}</h1>
 
 	<section class="card p-6">
 		<div class="flex flex-col md:flex-row md:items-center gap-6">
@@ -64,32 +65,32 @@
 			<div class="flex-1">
 				<div class="font-display font-bold text-xl">
 					{#if update?.upToDate === false}
-						Ny CS2-patch finns
+						{t('Ny CS2-patch finns', 'New CS2 patch available')}
 					{:else if update?.upToDate}
-						Servern har senaste versionen
+						{t('Servern har senaste versionen', 'The server is up to date')}
 					{:else}
-						Okänt läge
+						{t('Okänt läge', 'Unknown status')}
 					{/if}
 				</div>
 				<div class="text-sm text-muted mt-1">
-					Installerad: <span class="num text-text">{st.version?.patch ?? '–'}</span> (build {st.version?.buildId ?? '–'}) · uppdaterad {date(st.version?.lastUpdated)}
+					{t('Installerad:', 'Installed:')} <span class="num text-text">{st.version?.patch ?? '–'}</span> (build {st.version?.buildId ?? '–'}) · {t('uppdaterad', 'updated')} {date(st.version?.lastUpdated)}
 					{#if update?.upToDate === false && update.required}
-						· Steam kräver <span class="num text-warn">{update.required}</span>
+						· {t('Steam kräver', 'Steam requires')} <span class="num text-warn">{update.required}</span>
 					{/if}
 				</div>
 				{#if update?.error}<div class="text-sm text-bad mt-1">{update.error}</div>{/if}
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<button class="btn" disabled={checking} onclick={check}><Icon name="refresh" class="size-4" /> Kolla nu</button>
-				<button class="btn btn-primary" disabled={st.running || job?.running || !!st.busy} onclick={run}><Icon name="download" class="size-4" /> Uppdatera servern</button>
+				<button class="btn" disabled={checking} onclick={check}><Icon name="refresh" class="size-4" /> {t('Kolla nu', 'Check now')}</button>
+				<button class="btn btn-primary" disabled={st.running || job?.running || !!st.busy} onclick={run}><Icon name="download" class="size-4" /> {t('Uppdatera servern', 'Update server')}</button>
 			</div>
 		</div>
 		{#if st.running}
-			<p class="text-sm text-warn mt-4">Stoppa servern först – SteamCMD kan inte skriva över filer som används.</p>
+			<p class="text-sm text-warn mt-4">{t('Stoppa servern först – SteamCMD kan inte skriva över filer som används.', 'Stop the server first – SteamCMD can’t overwrite files that are in use.')}</p>
 		{/if}
 		<label class="flex items-start gap-2 text-sm text-muted mt-4 cursor-pointer max-w-2xl">
 			<input type="checkbox" bind:checked={validate} class="accent-amber-500 mt-1" />
-			<span><span class="text-text">Verifiera alla filer (validate).</span> Använd bara om servern är trasig – det återställer Valves egna cfg-filer om du har ändrat i dem.</span>
+			<span><span class="text-text">{t('Verifiera alla filer (validate).', 'Verify all files (validate).')}</span> {t('Använd bara om servern är trasig – det återställer Valves egna cfg-filer om du har ändrat i dem.', 'Only use this if the server is broken – it restores Valve’s own cfg files if you have edited them.')}</span>
 		</label>
 	</section>
 
@@ -97,11 +98,11 @@
 		<div class="flex items-center justify-between mb-3">
 			<h2 class="font-display font-bold tracking-wide">SteamCMD</h2>
 			{#if job?.running}
-				<span class="text-sm text-amber flex items-center gap-2"><span class="size-2 rounded-full bg-amber animate-pulse"></span> Pågår{progress !== null ? ` – ${progress.toFixed(0)}%` : ''}</span>
+				<span class="text-sm text-amber flex items-center gap-2"><span class="size-2 rounded-full bg-amber animate-pulse"></span> {t('Pågår', 'In progress')}{progress !== null ? ` – ${progress.toFixed(0)}%` : ''}</span>
 			{:else if job?.ok === true}
-				<span class="text-sm text-ok">Klar {date(job.finishedAt)}</span>
+				<span class="text-sm text-ok">{t('Klar', 'Done')} {date(job.finishedAt)}</span>
 			{:else if job?.ok === false}
-				<span class="text-sm text-bad">Misslyckades</span>
+				<span class="text-sm text-bad">{t('Misslyckades', 'Failed')}</span>
 			{/if}
 		</div>
 		{#if job?.running && progress !== null}
@@ -113,9 +114,9 @@
 			{#each job?.lines ?? [] as l}
 				<div class={/Success!/.test(l) ? 'text-ok' : /error|fail/i.test(l) ? 'text-bad' : ''}>{l}</div>
 			{:else}
-				<div class="text-dim">Ingen uppdatering har körts sedan panelen startade.</div>
+				<div class="text-dim">{t('Ingen uppdatering har körts sedan panelen startade.', 'No update has run since the panel started.')}</div>
 			{/each}
 		</div>
-		<p class="text-xs text-dim mt-3">Efter uppdateringen lägger panelen automatiskt tillbaka Metamod-raden i gameinfo.gi om den försvunnit.</p>
+		<p class="text-xs text-dim mt-3">{t('Efter uppdateringen lägger panelen automatiskt tillbaka Metamod-raden i gameinfo.gi om den försvunnit.', 'After the update, the panel automatically restores the Metamod line in gameinfo.gi if it went missing.')}</p>
 	</section>
 </div>
