@@ -19,6 +19,25 @@ public class ZombieMenuConfig : BasePluginConfig
     [JsonPropertyName("Prefix")] public string Prefix { get; set; } = "{gold}[Server]{default}";
     // "en" eller "sv"
     [JsonPropertyName("Language")] public string Language { get; set; } = "en";
+
+    // Zombiebanor från Steam Workshop, "namn=workshop-id" (samma format som panelens kartlista; "@" går också). Servern byter till en av dem när den startar
+    // på en vanlig bana, och till nästa när matchen är slut.
+    [JsonPropertyName("ZombieMaps")] public List<string> ZombieMaps { get; set; } = new()
+    {
+        "zm_mirage=3347415049",
+        "zm_ice_attack=3399305351",
+        "zm_lila_panic=3226022150",
+        "zm_prisonbreak=3648327879",
+        "zm_cs2_baggage=3377791997",
+        "zm_dust2_rebuild_b1_p=3326291211",
+        "zm_nuke_classic=3640585624",
+        "zm_3rooms=3101494948",
+        "zm_fox_v2=3381887875",
+        "zm_rats_1337_classic=3432802694",
+        "zm_iceworld_v2_1_p=3329108662",
+        "zm_dust_world=3610087255",
+    };
+    [JsonPropertyName("MapRotation")] public bool MapRotation { get; set; } = true;
 }
 
 // Adminmeny för cs2-zombie-mode: !zm. Ändrar ZombieMode.json och kan be panelen starta om servern,
@@ -27,7 +46,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.3.0";
+    public override string ModuleVersion => "1.4.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -74,6 +93,86 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         RegisterListener<Listeners.OnTick>(OnTick);
         // Ingen warmup i Zombie: CS2:s lägesconfigar slår på den vid varje kartstart, så vi avslutar den direkt.
         AddTimer(2f, NoWarmup, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
+        RegisterListener<Listeners.OnMapStart>(OnMapStartRotation);
+        _firstMap = !hotReload;
+    }
+
+    // ---------------------------------------------------------------- zombiebanor (workshop)
+    private bool _firstMap;
+    private bool _switching;
+
+    private List<(string name, string id)> ZmMaps => Config.ZombieMaps
+        .Select(m => m.Split(new[] { '@', '=' }, 2))
+        .Where(a => a.Length == 2 && a[1].Trim().All(char.IsDigit) && a[1].Trim().Length >= 6)
+        .Select(a => (a[0].Trim(), a[1].Trim()))
+        .ToList();
+
+    private void OnMapStartRotation(string map)
+    {
+        _switching = false;
+        if (!_firstMap) return;
+        _firstMap = false;
+        var maps = ZmMaps;
+        if (!Config.MapRotation || maps.Count == 0) return;
+        if (maps.Any(m => string.Equals(m.name, map, StringComparison.OrdinalIgnoreCase))) return;
+        // Servern startade på en vanlig bana (t.ex. de_dust2) – byt till en zombiebana.
+        var pick = maps[Random.Shared.Next(maps.Count)];
+        Logger.LogInformation("Zombie: byter från {Map} till {Zm} ({Id})", map, pick.name, pick.id);
+        AddTimer(5f, () => SwitchTo(pick), CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
+    }
+
+    private (string name, string id)? NextMap()
+    {
+        var maps = ZmMaps;
+        if (maps.Count == 0) return null;
+        var cur = Server.MapName;
+        int i = maps.FindIndex(m => string.Equals(m.name, cur, StringComparison.OrdinalIgnoreCase));
+        return maps[(i + 1) % maps.Count];
+    }
+
+    private bool ModeSwitchRequested()
+    {
+        try
+        {
+            var f = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "data", "gs_panel", "requests", "mode.json"));
+            return File.Exists(f) && DateTime.UtcNow - File.GetLastWriteTimeUtc(f) < TimeSpan.FromSeconds(60);
+        }
+        catch { return false; }
+    }
+
+    private void SwitchTo((string name, string id) map)
+    {
+        if (_switching) return;
+        _switching = true;
+        Server.ExecuteCommand($"host_workshop_map {map.id}");
+    }
+
+    [GameEventHandler]
+    public HookResult OnMatchEndRotation(EventCsWinPanelMatch e, GameEventInfo info)
+    {
+        if (!Config.MapRotation) return HookResult.Continue;
+        var next = NextMap();
+        if (next == null) return HookResult.Continue;
+        // Lägesomröstningen (!lage) körs först i ~20 s och kan starta om servern i ett annat läge.
+        // Därför byter vi bana först efter den, och skjuter upp spelets egen kartbyte (som annars
+        // tar en vanlig bana ur mapgroup) så att vår hinner före.
+        AddTimer(1f, () => Server.ExecuteCommand("mp_match_restart_delay 45"), CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
+        Server.PrintToChatAll($" {P} {T("Nästa bana", "Next map")}: {ChatColors.Green}{next.Value.name}");
+        var n = next.Value;
+        AddTimer(30f, () =>
+        {
+            if (ModeSwitchRequested()) return;
+            SwitchTo(n);
+        }, CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
+        return HookResult.Continue;
+    }
+
+    [ConsoleCommand("css_nextmap", "Show the next zombie map")]
+    public void OnNextMap(CCSPlayerController? player, CommandInfo cmd)
+    {
+        var next = NextMap();
+        var text = next == null ? T("Ingen zombiebana inlagd.", "No zombie maps configured.") : $"{T("Nästa bana", "Next map")}: {ChatColors.Green}{next.Value.name}";
+        if (player == null) Console.WriteLine(text); else player.PrintToChat($" {P} {text}");
     }
 
     // ---------------------------------------------------------------- rundans MVP
