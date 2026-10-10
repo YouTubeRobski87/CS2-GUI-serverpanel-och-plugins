@@ -20,8 +20,8 @@ public class ZombieMenuConfig : BasePluginConfig
     // "en" eller "sv"
     [JsonPropertyName("Language")] public string Language { get; set; } = "en";
 
-    // Zombiebanor från Steam Workshop, "namn=workshop-id" (samma format som panelens kartlista; "@" går också). Servern byter till en av dem när den startar
-    // på en vanlig bana, och till nästa när matchen är slut.
+    // Zombiebanor från Steam Workshop, "namn=workshop-id" (samma format som panelens kartlista; "@" går också).
+    // Används vid matchslut när minst MinHumansForZm riktiga spelare är inne.
     [JsonPropertyName("ZombieMaps")] public List<string> ZombieMaps { get; set; } = new()
     {
         "zm_mirage=3347415049",
@@ -38,6 +38,9 @@ public class ZombieMenuConfig : BasePluginConfig
         "zm_dust_world=3610087255",
     };
     [JsonPropertyName("MapRotation")] public bool MapRotation { get; set; } = true;
+    // Vanliga banor (med stöd för bottar) som används när färre än MinHumansForZm spelare är inne.
+    [JsonPropertyName("BotMaps")] public List<string> BotMaps { get; set; } = new() { "de_dust2", "cs_italy", "cs_office", "de_inferno", "de_mirage" };
+    [JsonPropertyName("MinHumansForZm")] public int MinHumansForZm { get; set; } = 2;
 }
 
 // Adminmeny för cs2-zombie-mode: !zm. Ändrar ZombieMode.json och kan be panelen starta om servern,
@@ -46,7 +49,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.5.0";
+    public override string ModuleVersion => "1.6.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -94,12 +97,14 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         // Ingen warmup i Zombie: CS2:s lägesconfigar slår på den vid varje kartstart, så vi avslutar den direkt.
         AddTimer(2f, NoWarmup, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
         RegisterListener<Listeners.OnMapStart>(OnMapStartRotation);
-        _firstMap = !hotReload;
+        AddTimer(10f, BotlessCheck, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
     }
 
     // ---------------------------------------------------------------- zombiebanor (workshop)
-    private bool _firstMap;
+    // De flesta zm_-banor från Workshop saknar navigeringsnät, så bottar kan inte spela där.
+    // Därför: zm_-banor när minst MinHumansForZm riktiga spelare är inne, annars en vanlig bana med bottar.
     private bool _switching;
+    private int _noBotChecks;
 
     private List<(string name, string id)> ZmMaps => Config.ZombieMaps
         .Select(m => m.Split(new[] { '@', '=' }, 2))
@@ -107,27 +112,47 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         .Select(a => (a[0].Trim(), a[1].Trim()))
         .ToList();
 
+    private List<string> BotMaps => Config.BotMaps.Where(m => !string.IsNullOrWhiteSpace(m)).Select(m => m.Trim()).ToList();
+
+    private static int HumanCount() => Utilities.GetPlayers().Count(p => p is { IsValid: true, IsBot: false, IsHLTV: false } && p.Connected == PlayerConnectedState.Connected);
+    private static int BotCountNow() => Utilities.GetPlayers().Count(p => p is { IsValid: true, IsBot: true, IsHLTV: false });
+
+    private bool OnZmMap => ZmMaps.Any(m => string.Equals(m.name, Server.MapName, StringComparison.OrdinalIgnoreCase))
+                            || Server.MapName.StartsWith("zm_", StringComparison.OrdinalIgnoreCase);
+
     private void OnMapStartRotation(string map)
     {
         _switching = false;
-        if (!_firstMap) return;
-        _firstMap = false;
-        var maps = ZmMaps;
-        if (!Config.MapRotation || maps.Count == 0) return;
-        if (maps.Any(m => string.Equals(m.name, map, StringComparison.OrdinalIgnoreCase))) return;
-        // Servern startade på en vanlig bana (t.ex. de_dust2) – byt till en zombiebana.
-        var pick = maps[Random.Shared.Next(maps.Count)];
-        Logger.LogInformation("Zombie: byter från {Map} till {Zm} ({Id})", map, pick.name, pick.id);
-        AddTimer(5f, () => SwitchTo(pick), CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
+        _noBotChecks = 0;
+    }
+
+    // Var 10:e sekund: sitter få spelare på en zm_-bana där bottarna inte kommer in, byt till en vanlig bana.
+    private void BotlessCheck()
+    {
+        if (!Config.MapRotation || _switching || !OnZmMap || BotMaps.Count == 0) { _noBotChecks = 0; return; }
+        if (HumanCount() >= Math.Max(1, Config.MinHumansForZm) || BotCountNow() > 0) { _noBotChecks = 0; return; }
+        if (++_noBotChecks < 3) return; // ~30 s
+        var pick = BotMaps[Random.Shared.Next(BotMaps.Count)];
+        Logger.LogInformation("Zombie: {Map} har inga bottar och för få spelare – byter till {Pick}", Server.MapName, pick);
+        if (HumanCount() > 0)
+            Server.PrintToChatAll($" {P} {T($"För få spelare för zombiebanorna (bottar funkar inte där) – byter till {ChatColors.Green}{pick}{ChatColors.Default} med bottar.", $"Not enough players for the zombie maps (bots can't play them) – switching to {ChatColors.Green}{pick}{ChatColors.Default} with bots.")}");
+        AddTimer(4f, () => SwitchTo((pick, "")), CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     private (string name, string id)? NextMap()
     {
+        if (HumanCount() < Math.Max(1, Config.MinHumansForZm))
+        {
+            var bm = BotMaps;
+            if (bm.Count == 0) return null;
+            int j = bm.FindIndex(m => string.Equals(m, Server.MapName, StringComparison.OrdinalIgnoreCase));
+            return (bm[(j + 1) % bm.Count], "");
+        }
         var maps = ZmMaps;
         if (maps.Count == 0) return null;
         var cur = Server.MapName;
         int i = maps.FindIndex(m => string.Equals(m.name, cur, StringComparison.OrdinalIgnoreCase));
-        return maps[(i + 1) % maps.Count];
+        return maps[i < 0 ? Random.Shared.Next(maps.Count) : (i + 1) % maps.Count];
     }
 
     private bool ModeSwitchRequested()
@@ -144,7 +169,7 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
     {
         if (_switching) return;
         _switching = true;
-        Server.ExecuteCommand($"host_workshop_map {map.id}");
+        Server.ExecuteCommand(map.id != "" ? $"host_workshop_map {map.id}" : $"changelevel {map.name}");
     }
 
     [GameEventHandler]
@@ -158,20 +183,20 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         // tar en vanlig bana ur mapgroup) så att vår hinner före.
         AddTimer(1f, () => Server.ExecuteCommand("mp_match_restart_delay 45"), CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
         Server.PrintToChatAll($" {P} {T("Nästa bana", "Next map")}: {ChatColors.Green}{next.Value.name}");
-        var n = next.Value;
         AddTimer(30f, () =>
         {
             if (ModeSwitchRequested()) return;
-            SwitchTo(n);
+            var n = NextMap(); // räkna om – spelare kan ha kommit eller gått
+            if (n != null) SwitchTo(n.Value);
         }, CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
         return HookResult.Continue;
     }
 
-    [ConsoleCommand("css_nextmap", "Show the next zombie map")]
+    [ConsoleCommand("css_nextmap", "Show the next map")]
     public void OnNextMap(CCSPlayerController? player, CommandInfo cmd)
     {
         var next = NextMap();
-        var text = next == null ? T("Ingen zombiebana inlagd.", "No zombie maps configured.") : $"{T("Nästa bana", "Next map")}: {ChatColors.Green}{next.Value.name}";
+        var text = next == null ? T("Ingen bana inlagd.", "No maps configured.") : $"{T("Nästa bana", "Next map")}: {ChatColors.Green}{next.Value.name}";
         if (player == null) Console.WriteLine(text); else player.PrintToChat($" {P} {text}");
     }
 
