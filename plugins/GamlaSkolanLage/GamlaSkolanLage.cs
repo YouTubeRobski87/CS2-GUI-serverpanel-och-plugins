@@ -32,7 +32,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     public void OnConfigParsed(LageConfig config) => Config = config;
 
     public override string ModuleName => "Gamla Skolan Lägesomröstning";
-    public override string ModuleVersion => "1.4.1";
+    public override string ModuleVersion => "1.5.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Vote for game mode: !mode / !lage";
 
@@ -74,7 +74,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
             _switching = false;
             // Lägets configar (t.ex. retakes.cfg ca 1 s efter kartstart) skriver över bott-inställningarna.
             // Är servern tom sparas deras värden på nytt och tomt-läget läggs på igen.
-            if (_idle) AddTimer(4f, () => { if (_idle) { SaveModeBotCvars(); ApplyIdleBotCvars(); } }, TimerFlags.STOP_ON_MAPCHANGE);
+            if (_idle || _wanted > 0) AddTimer(4f, () => { if (_idle || _wanted > 0) { SaveModeBotCvars(); ApplyIdleBotCvars(); } }, TimerFlags.STOP_ON_MAPCHANGE);
             // Efter att server.cfg och lägets configar har körts.
             AddTimer(3f, ApplyHostname, TimerFlags.STOP_ON_MAPCHANGE);
             AddTimer(15f, ApplyHostname, TimerFlags.STOP_ON_MAPCHANGE);
@@ -94,6 +94,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     }
 
     private int _missingChecks;
+    private int _wanted; // antal bottar vi vill ha just nu (0 = lägets egna inställningar gäller)
 
     private int TargetBots => Math.Clamp(Config.IdleBots, 1, 20);
 
@@ -106,12 +107,29 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     }
 
     // "normal" = exakt så många bottar oavsett antal människor; fill/join_after_player kräver ofta en människa.
-    private void ApplyIdleBotCvars()
+    private void ApplyBotCvars(int count)
     {
         if (Cvar("bot_join_after_player") != "0") Server.ExecuteCommand("bot_join_after_player 0");
         if (Cvar("bot_quota_mode") != "normal") Server.ExecuteCommand("bot_quota_mode normal");
-        if (Cvar("bot_quota") != TargetBots.ToString()) Server.ExecuteCommand($"bot_quota {TargetBots}");
+        if (Cvar("bot_quota") != count.ToString()) Server.ExecuteCommand($"bot_quota {count}");
     }
+
+    private void ApplyIdleBotCvars() => ApplyBotCvars(_wanted > 0 ? _wanted : TargetBots);
+
+    // Hur många bottar lägets egna inställningar skulle ge med så här många människor.
+    private int ModeBots(int humans)
+    {
+        int.TryParse(_savedQuota, out var q);
+        return _savedMode switch
+        {
+            "fill" => Math.Max(0, q - humans),
+            "match" => q * humans,
+            _ => q
+        };
+    }
+
+    // 1v1 Arenas sköter sina bottar själv (K4-Arenas-Bots).
+    private bool FillAllowed() => CurrentMode() != "arenas";
 
     private void IdleBotsCheck()
     {
@@ -121,43 +139,52 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
             // Viloläge skulle pausa allt (även den här kollen), så det stängs av när funktionen används.
             if (Cvar("sv_hibernate_when_empty") != "0") Server.ExecuteCommand("sv_hibernate_when_empty 0");
             int humans = Humans().Count;
-            if (humans == 0)
+
+            if (!_idle && _wanted == 0) SaveModeBotCvars(); // lägets egna värden, innan vi ändrar något
+
+            // Tom server: N bottar. Få spelare: fyll upp till N totalt, om läget självt skulle ge färre.
+            int wanted = 0;
+            if (humans == 0) wanted = TargetBots;
+            else if (humans < TargetBots && FillAllowed() && ModeBots(humans) < TargetBots - humans) wanted = TargetBots - humans;
+
+            if (wanted > 0)
             {
-                if (!_idle)
-                {
-                    SaveModeBotCvars();
-                    _idle = true;
-                    _missingChecks = 0;
-                    Logger.LogInformation("Tom server: {Count} bottar spelar tills någon ansluter (sparat: quota {Q}, mode {M}, join_after {J})",
-                        TargetBots, _savedQuota, _savedMode, _savedJoinAfter);
-                }
+                if (_wanted == 0 && !_idle)
+                    Logger.LogInformation(humans == 0
+                        ? "Tom server: {Count} bottar spelar tills någon ansluter (sparat: quota {Q}, mode {M}, join_after {J})"
+                        : "Få spelare: fyller på med {Count} bottar (sparat: quota {Q}, mode {M}, join_after {J})",
+                        wanted, _savedQuota, _savedMode, _savedJoinAfter);
+                _idle = humans == 0;
+                if (wanted != _wanted) _missingChecks = 0;
+                _wanted = wanted;
                 // Lägg på igen varje kontroll – en config eller ett annat plugin kan ha ändrat värdena.
-                ApplyIdleBotCvars();
+                ApplyBotCvars(wanted);
 
                 int bots = BotCount();
-                if (bots < TargetBots)
+                if (bots < wanted)
                 {
                     _missingChecks++;
                     if (_missingChecks >= 2)
                     {
                         // Motorn fyller inte på av sig själv – lägg till de som saknas för hand.
-                        int add = Math.Min(TargetBots - bots, 5);
+                        int add = Math.Min(wanted - bots, 5);
                         for (int k = 0; k < add; k++)
                             Server.ExecuteCommand((bots + k) % 2 == 0 ? "bot_add_ct" : "bot_add_t");
                         if (_missingChecks == 2 || _missingChecks % 12 == 0)
-                            Logger.LogWarning("Tom server: bara {Bots}/{Target} bottar – lägger till {Add} (quota {Q}, mode {M}, join_after {J}, hibernate {H})",
-                                bots, TargetBots, add, Cvar("bot_quota"), Cvar("bot_quota_mode"), Cvar("bot_join_after_player"), Cvar("sv_hibernate_when_empty"));
+                            Logger.LogWarning("Bara {Bots}/{Target} bottar – lägger till {Add} (quota {Q}, mode {M}, join_after {J}, hibernate {H})",
+                                bots, wanted, add, Cvar("bot_quota"), Cvar("bot_quota_mode"), Cvar("bot_join_after_player"), Cvar("sv_hibernate_when_empty"));
                     }
                 }
                 else _missingChecks = 0;
             }
-            else if (_idle)
+            else if (_idle || _wanted > 0)
             {
                 _idle = false;
+                _wanted = 0;
                 if (_savedJoinAfter != "") Server.ExecuteCommand($"bot_join_after_player {_savedJoinAfter}");
                 if (_savedMode != "") Server.ExecuteCommand($"bot_quota_mode {_savedMode}");
                 if (_savedQuota != "") Server.ExecuteCommand($"bot_quota {_savedQuota}");
-                Logger.LogInformation("Spelare ansluten: bottar tillbaka till lägets inställningar");
+                Logger.LogInformation("Tillräckligt många spelare: bottar tillbaka till lägets inställningar");
             }
         }
         catch (Exception ex) { Logger.LogWarning("Bottkoll misslyckades: {Msg}", ex.Message); }
