@@ -9,7 +9,7 @@ import { getSettings, updateSettings, readRconPassword, paths, saveGslt, maskedG
 import {
 	liveStatus, playerAction, pluginList, pluginAction, rankings,
 	EDITABLE, titleOf, readPluginConfig, writePluginConfig, mapCycle, changeMap,
-	setChatPrefix, syncPluginLanguage, setupCheck
+	setChatPrefix, syncPluginLanguage, setupCheck, readZombieConfig, writeZombieConfig
 } from '$lib/server/game.js';
 
 const fail = (e, status = 400) => json({ ok: false, error: e?.message || String(e) }, { status });
@@ -49,6 +49,8 @@ export async function GET({ params, url }) {
 					setup: setupCheck()
 				});
 			}
+			case 'zombie':
+				return json(readZombieConfig());
 			case 'modes': {
 				const s = getSettings();
 				return json({ modes: s.modes, builtin: BUILTIN_MODES });
@@ -111,6 +113,8 @@ export async function POST({ params, request }) {
 				return json({ ok: true, gslt: maskedGslt() });
 			case 'prefix':
 				return json({ ok: true, ...(await setChatPrefix(body.prefix)) });
+			case 'zombie':
+				return json({ ok: true, ...writeZombieConfig(body.values || {}) });
 			case 'modes/save':
 				return json({ ok: true, mode: saveMode(body.id, body.mode || {}) });
 			case 'modes/delete':

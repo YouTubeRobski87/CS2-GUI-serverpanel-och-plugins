@@ -14,12 +14,14 @@
 	let gsltInput = $state('');
 	let prefix = $state('');
 	let editing = $state(null); // { id, isNew, name, description, args, enable, disable, maps, mariadb }
+	let zombie = $state(null);
 
 	async function load() {
 		try {
 			[cfg, panel] = await Promise.all([api('config'), api('settings')]);
 			prefix = cfg.GamlaSkolanLage?.values?.Prefix ?? '';
 			await loadModes();
+			if (modes?.zombie) zombie = await api('zombie');
 		} catch (e) {
 			ctx.toast(e.message, 'error');
 		}
@@ -150,6 +152,24 @@
 			ctx.toast(t('Läget är återställt', 'Mode reset'));
 		} catch (e) {
 			ctx.toast(e.message, 'error');
+		}
+	}
+
+	async function saveZombie(restart = false) {
+		saving = 'zombie';
+		try {
+			const values = Object.fromEntries(zombie.fields.map((f) => [f.path, f.value]));
+			zombie = await api('zombie', { values });
+			if (restart) {
+				await api('restart', { mode: 'zombie' });
+				ctx.toast(t('Zombie-inställningar sparade – servern startar om i Zombie-läget', 'Zombie settings saved – restarting the server in Zombie mode'));
+			} else {
+				ctx.toast(t('Zombie-inställningar sparade – gäller nästa gång Zombie startas', 'Zombie settings saved – applies next time Zombie starts'));
+			}
+		} catch (e) {
+			ctx.toast(e.message, 'error');
+		} finally {
+			saving = '';
 		}
 	}
 
@@ -314,6 +334,36 @@
 							<button class="btn btn-primary" disabled={saving === 'mode' || !editing.id.trim()} onclick={saveEditing}><Icon name="check" class="size-4" /> {t('Spara läge', 'Save mode')}</button>
 						</div>
 						<p class="text-xs text-dim">{t('Omröstningen i spelet (!lage) känner till Retakes, Deathmatch och 1v1 Arenas. Egna lägen startar du från panelen.', 'The in-game vote (!mode) knows Retakes, Deathmatch and 1v1 Arenas. Custom modes are started from the panel.')}</p>
+					</div>
+				{/if}
+			</section>
+		{/if}
+
+		<!-- Zombie -->
+		{#if zombie}
+			<section class="card p-6 space-y-4">
+				<div class="flex items-center gap-3 flex-wrap">
+					<Icon name="users" class="size-5 text-amber" />
+					<h2 class="font-display font-bold text-lg">Zombie</h2>
+					<span class="text-sm text-muted">{t('Gäller när Zombie-läget startas (om)', 'Applies when Zombie mode (re)starts')}</span>
+				</div>
+				{#if !zombie.exists}
+					<p class="text-sm text-muted">{t('Starta Zombie-läget en gång så skapas inställningsfilen.', 'Start Zombie mode once to create the settings file.')}</p>
+				{:else}
+					<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+						{#each zombie.fields as f}
+							<div>
+								<div class="label mb-1.5">{f.label}</div>
+								<input class="input num" type="number" min={f.min} max={f.max} step={f.step} bind:value={f.value} />
+							</div>
+						{/each}
+					</div>
+					<p class="text-xs text-dim">{t('Samma inställningar finns i spelet med !zm (för admins).', 'The same settings are available in game with !zm (admins).')}</p>
+					<div class="flex flex-wrap gap-2 justify-end">
+						<button class="btn" disabled={saving === 'zombie'} onclick={() => saveZombie(false)}><Icon name="check" class="size-4" /> {t('Spara', 'Save')}</button>
+						{#if st.running && st.mode === 'zombie'}
+							<button class="btn btn-primary" disabled={saving === 'zombie'} onclick={() => saveZombie(true)}><Icon name="check" class="size-4" /> {t('Spara och starta om', 'Save and restart')}</button>
+						{/if}
 					</div>
 				{/if}
 			</section>
