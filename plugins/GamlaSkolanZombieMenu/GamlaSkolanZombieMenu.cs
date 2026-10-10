@@ -51,7 +51,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.8.0";
+    public override string ModuleVersion => "1.9.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -172,12 +172,43 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         return (bm.Count > 0 ? bm[Random.Shared.Next(bm.Count)] : "de_dust2", "");
     }
 
+    // Hemmabanan: den första zm_-banan som klarar bottar (zm_lila_panic). Där står servern när den är tom.
+    private (string name, string id)? HomeMap()
+    {
+        var good = ZmWithBots;
+        if (good.Count == 0) return null;
+        foreach (var k in Config.KnownBotMaps)
+        {
+            var m = good.FirstOrDefault(g => string.Equals(g.name, k?.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (m.name != null) return m;
+        }
+        return good[0];
+    }
+
+    private bool OnHomeMap => HomeMap() is { } h && string.Equals(h.name, Server.MapName, StringComparison.OrdinalIgnoreCase);
+
+    // Rotationen är vilande tills en riktig spelare ansluter, och somnar igen när servern varit tom ett tag.
+    private bool _rotationActive;
+    private int _emptyFor;
+
     // Var 10:e sekund.
     private void BotlessCheck()
     {
         if (!Config.MapRotation || _switching) return;
         int humans = HumanCount(), bots = BotCountNow();
         int min = Math.Max(1, Config.MinHumansForZm);
+
+        if (humans > 0)
+        {
+            if (!_rotationActive) Logger.LogInformation("Zombie: spelare ansluten – kartrotationen aktiveras (byter vid matchslut)");
+            _rotationActive = true;
+            _emptyFor = 0;
+        }
+        else if (++_emptyFor >= 12 && _rotationActive) // ~2 min tom
+        {
+            _rotationActive = false;
+            Logger.LogInformation("Zombie: servern är tom – kartrotationen vilar");
+        }
 
         if (OnZmMap)
         {
@@ -186,20 +217,20 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
             bool knownGood = BotOk.TryGetValue(Server.MapName, out var ok) && ok;
             if (++_noBotChecks < (knownGood ? 6 : 3)) return; // ~30 s (60 s för en bana som funkat förut)
             MarkBots(Server.MapName, false);
-            var pick = humans == 0 && ZmUntested.Count > 0 ? PickOther(ZmUntested)!.Value : BotFallback();
+            var pick = HomeMap() is { } hm && !OnHomeMap ? hm : BotFallback();
             if (humans > 0)
                 Server.PrintToChatAll($" {P} {T($"Bottar funkar inte på den här banan – byter till {ChatColors.Green}{pick.name}{ChatColors.Default}.", $"Bots can't play this map – switching to {ChatColors.Green}{pick.name}{ChatColors.Default}.")}");
             AddTimer(4f, () => SwitchTo(pick), CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
             return;
         }
 
-        // Vanlig bana och tom server: testa en otestad zm_-bana, eller gå till en som klarar bottar.
+        // Vanlig bana och tom server (t.ex. de_dust2 direkt efter start): gå till hemmabanan.
         if (humans > 0) { _emptyChecks = 0; return; }
-        if (++_emptyChecks < 2) return;
-        var next = PickOther(ZmUntested) ?? PickOther(ZmWithBots);
-        if (next == null) return;
-        Logger.LogInformation("Zombie: tom server – {What} {Map}", BotOk.ContainsKey(next.Value.name) ? "byter till" : "testar om bottar funkar på", next.Value.name);
-        SwitchTo(next.Value);
+        if (++_emptyChecks < 1) return;
+        var home = HomeMap();
+        if (home == null) return;
+        Logger.LogInformation("Zombie: tom server – byter till hemmabanan {Map}", home.Value.name);
+        SwitchTo(home.Value);
     }
 
     private (string name, string id)? NextMap()
@@ -267,7 +298,8 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
     public HookResult OnMatchEndRotation(EventCsWinPanelMatch e, GameEventInfo info)
     {
         if (!Config.MapRotation) return HookResult.Continue;
-        var next = NextMap();
+        // Ingen riktig spelare har varit inne: stanna på hemmabanan (ladda om den, annars tar spelet en bana ur mapgroup).
+        var next = _rotationActive ? NextMap() : (HomeMap() ?? NextMap());
         if (next == null) return HookResult.Continue;
         // Lägesomröstningen (!lage) körs först i ~20 s och kan starta om servern i ett annat läge.
         // Därför byter vi bana först efter den, och skjuter upp spelets egen kartbyte (som annars
@@ -277,7 +309,7 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         AddTimer(30f, () =>
         {
             if (ModeSwitchRequested()) return;
-            var n = NextMap(); // räkna om – spelare kan ha kommit eller gått
+            var n = _rotationActive ? NextMap() : (HomeMap() ?? NextMap()); // räkna om – spelare kan ha kommit eller gått
             if (n != null) SwitchTo(n.Value);
         }, CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
         return HookResult.Continue;
