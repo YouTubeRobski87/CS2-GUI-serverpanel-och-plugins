@@ -21,6 +21,8 @@ public class LageConfig : BasePluginConfig
     [JsonPropertyName("Prefix")] public string Prefix { get; set; } = "{gold}[Server]{default}";
     // "en" eller "sv"
     [JsonPropertyName("Language")] public string Language { get; set; } = "en";
+    // Antal bottar som spelar när ingen människa är inne (0 = av). Bottarna syns som bottar i serverlistan.
+    [JsonPropertyName("IdleBots")] public int IdleBots { get; set; } = 0;
 }
 
 [MinimumApiVersion(375)]
@@ -30,7 +32,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     public void OnConfigParsed(LageConfig config) => Config = config;
 
     public override string ModuleName => "Gamla Skolan Lägesomröstning";
-    public override string ModuleVersion => "1.3.0";
+    public override string ModuleVersion => "1.4.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Vote for game mode: !mode / !lage";
 
@@ -70,11 +72,51 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
         RegisterListener<Listeners.OnMapStart>(_ =>
         {
             _switching = false;
+            _idle = false; // lägets configar körs om vid kartstart
             // Efter att server.cfg och lägets configar har körts.
             AddTimer(3f, ApplyHostname, TimerFlags.STOP_ON_MAPCHANGE);
             AddTimer(15f, ApplyHostname, TimerFlags.STOP_ON_MAPCHANGE);
         });
         AddTimer(1f, ApplyHostname);
+        AddTimer(5f, IdleBotsCheck, TimerFlags.REPEAT);
+    }
+
+    // ---------------------------------------------------------------- bottar när servern är tom
+    private bool _idle;
+    private string _savedQuota = "", _savedMode = "", _savedJoinAfter = "";
+
+    private static string Cvar(string name)
+    {
+        try { return CounterStrikeSharp.API.Modules.Cvars.ConVar.Find(name)?.StringValue ?? ""; } catch { return ""; }
+    }
+
+    private void IdleBotsCheck()
+    {
+        if (Config.IdleBots <= 0) return;
+        try
+        {
+            // Viloläge skulle pausa allt (även den här kollen), så det stängs av när funktionen används.
+            if (Cvar("sv_hibernate_when_empty") != "0") Server.ExecuteCommand("sv_hibernate_when_empty 0");
+            int humans = Humans().Count;
+            if (humans == 0 && !_idle)
+            {
+                _savedQuota = Cvar("bot_quota"); _savedMode = Cvar("bot_quota_mode"); _savedJoinAfter = Cvar("bot_join_after_player");
+                _idle = true;
+                Server.ExecuteCommand("bot_join_after_player 0");
+                Server.ExecuteCommand("bot_quota_mode fill");
+                Server.ExecuteCommand($"bot_quota {Math.Clamp(Config.IdleBots, 1, 20)}");
+                Logger.LogInformation("Tom server: {Count} bottar spelar tills någon ansluter", Config.IdleBots);
+            }
+            else if (humans > 0 && _idle)
+            {
+                _idle = false;
+                if (_savedJoinAfter != "") Server.ExecuteCommand($"bot_join_after_player {_savedJoinAfter}");
+                if (_savedMode != "") Server.ExecuteCommand($"bot_quota_mode {_savedMode}");
+                if (_savedQuota != "") Server.ExecuteCommand($"bot_quota {_savedQuota}");
+                Logger.LogInformation("Spelare ansluten: bottar tillbaka till lägets inställningar");
+            }
+        }
+        catch (Exception ex) { Logger.LogWarning("Bottkoll misslyckades: {Msg}", ex.Message); }
     }
 
     private void ApplyHostname()
