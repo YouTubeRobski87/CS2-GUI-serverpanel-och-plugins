@@ -53,7 +53,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.9.1";
+    public override string ModuleVersion => "1.9.2";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -339,6 +339,9 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         _mvpUntil = DateTime.MinValue;
         _restartTimer?.Kill();
         _restartTimer = null;
+        _endedSinceStart = false;
+        _stormCount = 0;
+        _hardRestarts = 0;
         Server.ExecuteCommand($"mp_round_restart_delay {RoundEndDelay.ToString(CultureInfo.InvariantCulture)}");
         return HookResult.Continue;
     }
@@ -388,9 +391,51 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         }, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT | CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
     }
 
+    private bool _endedSinceStart;
+    private int _stormCount;
+    private DateTime _stormWindow = DateTime.MinValue;
+    private DateTime _lastHardRestart = DateTime.MinValue;
+    private int _hardRestarts;
+
+    private void HandleRoundEndStorm()
+    {
+        var now = DateTime.UtcNow;
+        if (now - _stormWindow > TimeSpan.FromSeconds(3)) { _stormWindow = now; _stormCount = 0; }
+        if (++_stormCount < 30) return;                                   // ~30 rundslut på 3 s = slinga
+        if (now - _lastHardRestart < TimeSpan.FromSeconds(30)) return;    // ge förra åtgärden tid
+        _lastHardRestart = now;
+        _stormCount = 0;
+        _hardRestarts++;
+        if (_hardRestarts <= 2)
+        {
+            Logger.LogWarning("Rundslut i slinga utan ny runda – startar om matchen (försök {Try})", _hardRestarts);
+            Server.NextFrame(() =>
+            {
+                Server.ExecuteCommand("mp_ignore_round_win_conditions 0");
+                Server.ExecuteCommand("mp_restartgame 1");
+            });
+        }
+        else
+        {
+            var target = HomeMap() ?? BotFallback();
+            Logger.LogWarning("Rundslut i slinga kvarstår – byter bana till {Map}", target.name);
+            _hardRestarts = 0;
+            Server.NextFrame(() => SwitchTo(target));
+        }
+    }
+
     [GameEventHandler(HookMode.Post)]
     public HookResult OnRoundEndMvp(EventRoundEnd e, GameEventInfo info)
     {
+        // Redan avslutad runda som avslutas igen: motorn har fastnat i en slinga (round_end varje tick,
+        // ingen ny runda). Då får vakten inte nollställas här – istället startar vi om matchen, och
+        // hjälper inte det byter vi till hemmabanan.
+        if (_endedSinceStart)
+        {
+            HandleRoundEndStorm();
+            return HookResult.Continue;
+        }
+        _endedSinceStart = true;
         ArmRestartWatchdog(e.Winner);
         // Topp 3: MVP stort överst, tvåan och trean (silver och brons) under.
         var top = _round
