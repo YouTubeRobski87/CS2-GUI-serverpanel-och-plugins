@@ -9,6 +9,7 @@ using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
+using CounterStrikeSharp.API.Modules.Entities.Constants;
 using Microsoft.Extensions.Logging;
 
 namespace GamlaSkolanZombieMenu;
@@ -26,7 +27,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.2.1";
+    public override string ModuleVersion => "1.3.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -87,6 +88,8 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
     {
         _round.Clear();
         _mvpUntil = DateTime.MinValue;
+        _restartTimer?.Kill();
+        _restartTimer = null;
         Server.ExecuteCommand($"mp_round_restart_delay {RoundEndDelay.ToString(CultureInfo.InvariantCulture)}");
         return HookResult.Continue;
     }
@@ -111,9 +114,35 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
         return HookResult.Continue;
     }
 
+    // Ibland avslutar motorn rundan (round_end skickas) men startar aldrig nästa – då springer alla runt tills
+    // rundtiden tar slut. Kommer ingen ny runda i tid ber vi spelreglerna avsluta rundan igen, vilket startar nästa.
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _restartTimer;
+    private int _restartTries;
+
+    private void ArmRestartWatchdog(int winner)
+    {
+        _restartTimer?.Kill();
+        _restartTries = 0;
+        var reason = winner switch { 3 => RoundEndReason.CTsWin, 2 => RoundEndReason.TerroristsWin, _ => RoundEndReason.RoundDraw };
+        _restartTimer = AddTimer(RoundEndDelay + 2f, () =>
+        {
+            try
+            {
+                if (_restartTries++ >= 3) { _restartTimer?.Kill(); _restartTimer = null; return; }
+                var rules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+                if (rules == null) return;
+                Logger.LogInformation("Ingen ny runda efter rundslut – avslutar rundan igen ({Reason}, försök {Try})", reason, _restartTries);
+                Server.ExecuteCommand("mp_ignore_round_win_conditions 0");
+                rules.TerminateRound(1.0f, reason);
+            }
+            catch (Exception ex) { Logger.LogWarning("Omstart av runda misslyckades: {Msg}", ex.Message); }
+        }, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT | CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
+    }
+
     [GameEventHandler(HookMode.Post)]
     public HookResult OnRoundEndMvp(EventRoundEnd e, GameEventInfo info)
     {
+        ArmRestartWatchdog(e.Winner);
         var best = _round
             .Select(kv => (p: Utilities.GetPlayerFromSlot(kv.Key), s: kv.Value))
             .Where(x => x.p != null && x.p.IsValid && !x.p.IsHLTV)
@@ -130,9 +159,9 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
             : T($"{best.s.kills} kills · {best.s.damage} skada", $"{best.s.kills} kills · {best.s.damage} damage");
         var name = Esc(p.PlayerName);
         _mvpHtml =
-            $"<font class='fontSize-m' color='#FFD700'>★ {T("RUNDANS MVP", "ROUND MVP")}</font><br>" +
-            $"<font class='fontSize-l' color='{(zombie ? "#ff5a5a" : "#7CFC00")}'>{name}</font><br>" +
-            $"<font class='fontSize-s' color='#ffffff'>{role} · {Esc(stats)}</font>";
+            $"<font class='fontSize-xl' color='#FFD700'>★ {T("RUNDANS MVP", "ROUND MVP")}</font><br>" +
+            $"<font class='fontSize-xl' color='{(zombie ? "#ff5a5a" : "#7CFC00")}'>{name}</font><br>" +
+            $"<font class='fontSize-m' color='#ffffff'>{role} · {Esc(stats)}</font>";
         _mvpUntil = DateTime.UtcNow.AddSeconds(MvpShowSeconds);
         Server.PrintToChatAll($" {P} {ChatColors.Gold}★ {T("Rundans MVP", "Round MVP")}:{ChatColors.Default} {(zombie ? ChatColors.Red : ChatColors.Green)}{p.PlayerName}{ChatColors.Default} – {stats}");
         return HookResult.Continue;
