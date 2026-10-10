@@ -42,6 +42,8 @@ public class ZombieMenuConfig : BasePluginConfig
     [JsonPropertyName("BotMaps")] public List<string> BotMaps { get; set; } = new() { "de_dust2", "cs_italy", "cs_office", "de_inferno", "de_mirage" };
     [JsonPropertyName("MinHumansForZm")] public int MinHumansForZm { get; set; } = 2;
     // zm_-banor som vi redan vet klarar bottar. Används direkt när få spelare är inne.
+    // Banan servern står på när den är tom (måste klara bottar).
+    [JsonPropertyName("HomeMap")] public string HomeMap { get; set; } = "zm_prisonbreak";
     [JsonPropertyName("KnownBotMaps")] public List<string> KnownBotMaps { get; set; } = new() { "zm_lila_panic" };
 }
 
@@ -51,7 +53,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.9.0";
+    public override string ModuleVersion => "1.9.1";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -177,7 +179,7 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
     {
         var good = ZmWithBots;
         if (good.Count == 0) return null;
-        foreach (var k in Config.KnownBotMaps)
+        foreach (var k in new[] { Config.HomeMap }.Concat(Config.KnownBotMaps))
         {
             var m = good.FirstOrDefault(g => string.Equals(g.name, k?.Trim(), StringComparison.OrdinalIgnoreCase));
             if (m.name != null) return m;
