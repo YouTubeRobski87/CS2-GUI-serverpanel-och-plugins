@@ -32,7 +32,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     public void OnConfigParsed(LageConfig config) => Config = config;
 
     public override string ModuleName => "Gamla Skolan Lägesomröstning";
-    public override string ModuleVersion => "1.5.1";
+    public override string ModuleVersion => "1.5.2";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Vote for game mode: !mode / !lage";
 
@@ -177,8 +177,11 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
                     {
                         // Motorn fyller inte på av sig själv – lägg till de som saknas för hand.
                         int add = Math.Min(wanted - bots, 5);
+                        // I Zombie är T = zombier: bottar ska börja som människor (CT) så att pluginet själv väljer
+                        // vem som smittas. En bot som läggs direkt i T räknas inte som zombie och rundan låser sig.
+                        bool zombie = CurrentMode() == "zombie";
                         for (int k = 0; k < add; k++)
-                            Server.ExecuteCommand((bots + k) % 2 == 0 ? "bot_add_ct" : "bot_add_t");
+                            Server.ExecuteCommand(zombie || (bots + k) % 2 == 0 ? "bot_add_ct" : "bot_add_t");
                         if (_missingChecks == 2 || _missingChecks % 12 == 0)
                             Logger.LogWarning("Bara {Bots}/{Target} bottar – lägger till {Add} (quota {Q}, mode {M}, join_after {J}, hibernate {H})",
                                 bots, wanted, add, Cvar("bot_quota"), Cvar("bot_quota_mode"), Cvar("bot_join_after_player"), Cvar("sv_hibernate_when_empty"));
