@@ -32,7 +32,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     public void OnConfigParsed(LageConfig config) => Config = config;
 
     public override string ModuleName => "Gamla Skolan Lägesomröstning";
-    public override string ModuleVersion => "1.4.0";
+    public override string ModuleVersion => "1.4.1";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Vote for game mode: !mode / !lage";
 
@@ -72,12 +72,15 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
         RegisterListener<Listeners.OnMapStart>(_ =>
         {
             _switching = false;
-            _idle = false; // lägets configar körs om vid kartstart
+            // Lägets configar (t.ex. retakes.cfg ca 1 s efter kartstart) skriver över bott-inställningarna.
+            // Är servern tom sparas deras värden på nytt och tomt-läget läggs på igen.
+            if (_idle) AddTimer(4f, () => { if (_idle) { SaveModeBotCvars(); ApplyIdleBotCvars(); } }, TimerFlags.STOP_ON_MAPCHANGE);
             // Efter att server.cfg och lägets configar har körts.
             AddTimer(3f, ApplyHostname, TimerFlags.STOP_ON_MAPCHANGE);
             AddTimer(15f, ApplyHostname, TimerFlags.STOP_ON_MAPCHANGE);
         });
         AddTimer(1f, ApplyHostname);
+        if (Config.IdleBots > 0) Server.ExecuteCommand("sv_hibernate_when_empty 0");
         AddTimer(5f, IdleBotsCheck, TimerFlags.REPEAT);
     }
 
@@ -90,6 +93,26 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
         try { return CounterStrikeSharp.API.Modules.Cvars.ConVar.Find(name)?.StringValue ?? ""; } catch { return ""; }
     }
 
+    private int _missingChecks;
+
+    private int TargetBots => Math.Clamp(Config.IdleBots, 1, 20);
+
+    private static int BotCount() =>
+        Utilities.GetPlayers().Count(p => p is { IsValid: true, IsBot: true, IsHLTV: false });
+
+    private void SaveModeBotCvars()
+    {
+        _savedQuota = Cvar("bot_quota"); _savedMode = Cvar("bot_quota_mode"); _savedJoinAfter = Cvar("bot_join_after_player");
+    }
+
+    // "normal" = exakt så många bottar oavsett antal människor; fill/join_after_player kräver ofta en människa.
+    private void ApplyIdleBotCvars()
+    {
+        if (Cvar("bot_join_after_player") != "0") Server.ExecuteCommand("bot_join_after_player 0");
+        if (Cvar("bot_quota_mode") != "normal") Server.ExecuteCommand("bot_quota_mode normal");
+        if (Cvar("bot_quota") != TargetBots.ToString()) Server.ExecuteCommand($"bot_quota {TargetBots}");
+    }
+
     private void IdleBotsCheck()
     {
         if (Config.IdleBots <= 0) return;
@@ -98,16 +121,37 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
             // Viloläge skulle pausa allt (även den här kollen), så det stängs av när funktionen används.
             if (Cvar("sv_hibernate_when_empty") != "0") Server.ExecuteCommand("sv_hibernate_when_empty 0");
             int humans = Humans().Count;
-            if (humans == 0 && !_idle)
+            if (humans == 0)
             {
-                _savedQuota = Cvar("bot_quota"); _savedMode = Cvar("bot_quota_mode"); _savedJoinAfter = Cvar("bot_join_after_player");
-                _idle = true;
-                Server.ExecuteCommand("bot_join_after_player 0");
-                Server.ExecuteCommand("bot_quota_mode fill");
-                Server.ExecuteCommand($"bot_quota {Math.Clamp(Config.IdleBots, 1, 20)}");
-                Logger.LogInformation("Tom server: {Count} bottar spelar tills någon ansluter", Config.IdleBots);
+                if (!_idle)
+                {
+                    SaveModeBotCvars();
+                    _idle = true;
+                    _missingChecks = 0;
+                    Logger.LogInformation("Tom server: {Count} bottar spelar tills någon ansluter (sparat: quota {Q}, mode {M}, join_after {J})",
+                        TargetBots, _savedQuota, _savedMode, _savedJoinAfter);
+                }
+                // Lägg på igen varje kontroll – en config eller ett annat plugin kan ha ändrat värdena.
+                ApplyIdleBotCvars();
+
+                int bots = BotCount();
+                if (bots < TargetBots)
+                {
+                    _missingChecks++;
+                    if (_missingChecks >= 2)
+                    {
+                        // Motorn fyller inte på av sig själv – lägg till de som saknas för hand.
+                        int add = Math.Min(TargetBots - bots, 5);
+                        for (int k = 0; k < add; k++)
+                            Server.ExecuteCommand((bots + k) % 2 == 0 ? "bot_add_ct" : "bot_add_t");
+                        if (_missingChecks == 2 || _missingChecks % 12 == 0)
+                            Logger.LogWarning("Tom server: bara {Bots}/{Target} bottar – lägger till {Add} (quota {Q}, mode {M}, join_after {J}, hibernate {H})",
+                                bots, TargetBots, add, Cvar("bot_quota"), Cvar("bot_quota_mode"), Cvar("bot_join_after_player"), Cvar("sv_hibernate_when_empty"));
+                    }
+                }
+                else _missingChecks = 0;
             }
-            else if (humans > 0 && _idle)
+            else if (_idle)
             {
                 _idle = false;
                 if (_savedJoinAfter != "") Server.ExecuteCommand($"bot_join_after_player {_savedJoinAfter}");
