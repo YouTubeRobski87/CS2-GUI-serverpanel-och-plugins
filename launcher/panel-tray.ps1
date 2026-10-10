@@ -73,7 +73,25 @@ function Start-Panel {
     return $false
 }
 
+# Finns panelfönstret redan? Då tar vi fram det i stället för att öppna ett till.
+Add-Type -Namespace GS -Name Win -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool ShowWindowAsync(System.IntPtr hWnd, int nCmdShow);
+[DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr hWnd);
+'@ -ErrorAction SilentlyContinue
+
+function Focus-PanelWindow {
+    $win = Get-Process chrome, msedge -ErrorAction SilentlyContinue |
+        Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like '*Gamla Skolan*Panel*' } |
+        Select-Object -First 1
+    if (-not $win) { return $false }
+    [GS.Win]::ShowWindowAsync($win.MainWindowHandle, 9) | Out-Null   # 9 = återställ om minimerat
+    [GS.Win]::SetForegroundWindow($win.MainWindowHandle) | Out-Null
+    Log 'Panelfönstret fanns redan – tog fram det'
+    return $true
+}
+
 function Open-PanelWindow {
+    if (Focus-PanelWindow) { return }
     $browser = Find-Browser
     Log "Öppnar fönster med: $browser"
     if ($browser) {
