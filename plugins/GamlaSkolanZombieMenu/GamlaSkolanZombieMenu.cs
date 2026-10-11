@@ -27,7 +27,6 @@ public class ZombieMenuConfig : BasePluginConfig
         "zm_mirage=3347415049",
         "zm_ice_attack=3399305351",
         "zm_lila_panic=3226022150",
-        "zm_prisonbreak=3648327879",
         "zm_cs2_baggage=3377791997",
         "zm_dust2_rebuild_b1_p=3326291211",
         "zm_nuke_classic=3640585624",
@@ -43,7 +42,7 @@ public class ZombieMenuConfig : BasePluginConfig
     [JsonPropertyName("MinHumansForZm")] public int MinHumansForZm { get; set; } = 2;
     // zm_-banor som vi redan vet klarar bottar. Används direkt när få spelare är inne.
     // Banan servern står på när den är tom (måste klara bottar).
-    [JsonPropertyName("HomeMap")] public string HomeMap { get; set; } = "zm_prisonbreak";
+    [JsonPropertyName("HomeMap")] public string HomeMap { get; set; } = "zm_lila_panic";
     [JsonPropertyName("KnownBotMaps")] public List<string> KnownBotMaps { get; set; } = new() { "zm_lila_panic" };
 }
 
@@ -53,7 +52,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.9.2";
+    public override string ModuleVersion => "1.9.3";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
