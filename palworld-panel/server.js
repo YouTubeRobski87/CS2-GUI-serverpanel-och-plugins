@@ -128,7 +128,7 @@ function pal(method, endpoint, body) {
 }
 
 // ------------------------------------------------------------------ serverprocessen
-const state = { running: false, pid: null, busy: null, apiOk: false };
+const state = { running: false, pid: null, busy: null, apiOk: false, stopTimer: null };
 const game = { info: null, metrics: null, players: [], updated: 0 };
 
 function probe() {
@@ -142,6 +142,9 @@ function probe() {
 			state.pid = main ? Number(main[2]) : null;
 			if (was && !state.running) {
 				log('server', 'Servern har stängts');
+				// Servern stängde själv – avbryt nödstoppet så att det inte träffar en ny server.
+				clearTimeout(state.stopTimer);
+				state.stopTimer = null;
 				state.apiOk = false;
 				if (state.busy === 'stopping') state.busy = null;
 			}
@@ -180,6 +183,8 @@ async function refreshGame() {
 setInterval(refreshGame, 5000);
 
 async function startServer() {
+	clearTimeout(state.stopTimer);
+	state.stopTimer = null;
 	await probe();
 	if (state.running) throw new Error('Servern är redan igång.');
 	if (state.busy) throw new Error('Vänta, panelen håller på med något annat.');
@@ -216,7 +221,9 @@ async function stopServer() {
 	} catch {
 		/* svarar inte API:t tar vi till taskkill nedan */
 	}
-	setTimeout(async () => {
+	clearTimeout(state.stopTimer);
+	state.stopTimer = setTimeout(async () => {
+		state.stopTimer = null;
 		await probe();
 		if (state.running && state.pid) {
 			log('error', 'Servern stängdes inte – tvingar stopp');
