@@ -213,6 +213,7 @@ async function startServer() {
 async function stopServer() {
 	await probe();
 	if (!state.running) throw new Error('Servern är inte igång.');
+	if (state.busy) throw new Error('Vänta, panelen håller redan på att starta eller stoppa servern.');
 	state.busy = 'stopping';
 	log('server', 'Sparar världen och stoppar servern…');
 	try {
@@ -400,6 +401,8 @@ const routes = {
 	'POST /api/start': async () => (await startServer(), { ok: true }),
 	'POST /api/stop': async () => (await stopServer(), { ok: true }),
 	'POST /api/restart': async () => {
+		// Dubbelklick får inte starta två omstarter samtidigt.
+		if (state.busy) throw new Error('Vänta, panelen håller redan på att starta eller stoppa servern.');
 		(async () => {
 			await stopServer();
 			if (await waitStopped(70000)) {
