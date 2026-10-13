@@ -16,7 +16,7 @@ const CFG_FILE = path.join(DATA_DIR, 'panel-settings.json');
 const DEFAULTS = {
 	serverDir: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\PalServer',
 	port: 8029,
-	launchArgs: ['-useperfthreads', '-NoAsyncLoadingThread', '-UseMultithreadForDS']
+	launchArgs: ['-publiclobby', '-useperfthreads', '-NoAsyncLoadingThread', '-UseMultithreadForDS']
 };
 let cfg = { ...DEFAULTS };
 try {
