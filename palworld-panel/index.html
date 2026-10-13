@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gamla Skolan · Palworld Panel</title>
+<style>
+	:root {
+		--bg: #121417; --panel: #1b1e23; --line: #2a2f37; --text: #e8e6e1; --muted: #8c929b;
+		--accent: #3aa7d8; --ok: #5bb974; --warn: #e0a83a; --bad: #e0574a;
+	}
+	* { box-sizing: border-box; }
+	body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, "Segoe UI", sans-serif; }
+	header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: #0e1012; }
+	header h1 { font-size: 16px; margin: 0; letter-spacing: .02em; }
+	header h1 span { color: var(--accent); }
+	.pill { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--line); }
+	.pill.ok { background: rgba(91,185,116,.15); color: var(--ok); }
+	.pill.bad { background: rgba(224,87,74,.15); color: var(--bad); }
+	.pill.warn { background: rgba(224,168,58,.15); color: var(--warn); }
+	nav { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+	nav button { background: none; border: 0; color: var(--muted); padding: 12px 14px; cursor: pointer; font: inherit; border-bottom: 2px solid transparent; }
+	nav button.active { color: var(--text); border-color: var(--accent); }
+	main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+	section { display: none; } section.active { display: block; }
+	.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+	.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+	.card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+	.card .v { font-size: 22px; font-weight: 650; margin-top: 4px; }
+	.btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+	button.b { background: var(--line); color: var(--text); border: 0; border-radius: 8px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+	button.b:hover { filter: brightness(1.2); }
+	button.b.primary { background: var(--accent); }
+	button.b.danger { background: #5a2420; }
+	button.b:disabled { opacity: .4; cursor: default; }
+	h2 { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 24px 0 10px; }
+	.events div { padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+	.events .t { color: var(--muted); margin-right: 8px; font-variant-numeric: tabular-nums; }
+	.console { background: #0b0c0e; border: 1px solid var(--line); border-radius: 10px; height: 60vh; overflow: auto; padding: 10px 12px; font: 12px/1.45 Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+	.console .err { color: var(--bad); } .console .wrn { color: var(--warn); } .console .me { color: #7fb4ff; }
+	.notice { background: rgba(224,168,58,.1); border: 1px solid rgba(224,168,58,.3); color: var(--warn); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; }
+	.cmdrow { display: flex; gap: 8px; margin-top: 10px; }
+	input, select { background: #0e1012; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; font: inherit; width: 100%; }
+	table { width: 100%; border-collapse: collapse; }
+	th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+	th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+	.form { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px 20px; }
+	input[type=range] { accent-color: var(--accent); }
+	label span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+	.muted { color: var(--muted); }
+	#toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; display: none; max-width: 420px; }
+	#toast.show { display: block; } #toast.bad { border-color: var(--bad); }
+</style>
+</head>
+<body>
+<header>
+	<h1>Gamla Skolan · <span>Palworld</span></h1>
+	<span id="statusPill" class="pill">…</span>
+	<span id="hdrName" class="muted"></span>
+</header>
+<nav>
+	<button data-tab="overview" class="active">Översikt</button>
+	<button data-tab="settings">Inställningar</button>
+	<button data-tab="players">Spelare</button>
+	<button data-tab="console">Logg</button>
+</nav>
+<main>
+	<section id="overview" class="active">
+		<div class="btns">
+			<button class="b primary" id="btnStart">Starta</button>
+			<button class="b" id="btnRestart">Starta om</button>
+			<button class="b danger" id="btnStop">Stoppa</button>
+			<button class="b" id="btnSave">Spara världen</button>
+		</div>
+		<div class="grid">
+			<div class="card"><div class="k">Spelare</div><div class="v" id="cPlayers">–</div></div>
+			<div class="card"><div class="k">Speldag</div><div class="v" id="cDay">–</div></div>
+			<div class="card"><div class="k">Server-FPS</div><div class="v" id="cFps">–</div></div>
+			<div class="card"><div class="k">Igång sedan</div><div class="v" id="cUp">–</div></div>
+		</div>
+		<h2>Händelser</h2>
+		<div class="events card" id="events"></div>
+	</section>
+
+	<section id="console">
+		<div id="staleNote" class="notice" style="display:none"></div>
+		<div class="console" id="log"></div>
+		<form class="cmdrow" id="cmdForm">
+			<input id="cmd" placeholder="Meddelande till alla på servern" autocomplete="off" maxlength="200" />
+			<button class="b primary">Skicka</button>
+		</form>
+	</section>
+
+	<section id="players">
+		<p class="muted" id="noPlayers">Inga spelare inne just nu.</p>
+		<table id="pTable" style="display:none">
+			<thead><tr><th>Namn</th><th>Nivå</th><th>Byggen</th><th>Ping</th><th></th></tr></thead>
+			<tbody></tbody>
+		</table>
+	</section>
+
+	<section id="settings">
+		<p class="muted">Ändringarna sparas i PalWorldSettings.ini och gäller nästa gång servern startar. 1 = spelets standard.</p>
+		<form id="setForm"><div class="form" id="setFields"></div>
+			<div class="btns" style="margin-top:20px"><button class="b primary">Spara</button></div>
+		</form>
+	</section>
+
+</main>
+<div id="toast"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const api = async (url, body) => {
+	const r = await fetch(url, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Panel': '1' }, body: JSON.stringify(body) });
+	const j = await r.json();
+	if (!r.ok) throw new Error(j.error || 'Fel');
+	return j;
+};
+const toast = (msg, bad) => {
+	const t = $('#toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '');
+	clearTimeout(t._h); t._h = setTimeout(() => (t.className = ''), 4000);
+};
+const escH = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const fmtTime = (t) => new Date(t).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+
+// Flikar
+document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
+	document.querySelectorAll('nav button, section').forEach((e) => e.classList.remove('active'));
+	b.classList.add('active'); $('#' + b.dataset.tab).classList.add('active');
+	if (b.dataset.tab === 'settings') loadSettings();
+});
+
+// Status
+let st = {};
+async function refresh() {
+	try { st = await api('/api/status'); } catch { return; }
+	const pill = $('#statusPill');
+	if (st.busy === 'starting') { pill.textContent = 'Startar…'; pill.className = 'pill warn'; }
+	else if (st.busy === 'stopping') { pill.textContent = 'Stoppar…'; pill.className = 'pill warn'; }
+	else if (st.busy === 'updating') { pill.textContent = 'Uppdaterar…'; pill.className = 'pill warn'; }
+	else if (st.running) { pill.textContent = st.api ? 'Igång' : 'Igång (startar upp)'; pill.className = 'pill ok'; }
+	else { pill.textContent = st.installed ? 'Stoppad' : 'Inte installerad'; pill.className = 'pill bad'; }
+	$('#hdrName').textContent = (st.serverName || '') + (st.version ? ' · ' + st.version : '');
+	$('#btnStart').disabled = st.running || !!st.busy || !st.installed;
+	$('#btnStop').disabled = !st.running || !!st.busy;
+	$('#btnRestart').disabled = !st.running || !!st.busy;
+	$('#btnSave').disabled = !st.running || !st.api || !!st.busy;
+	$('#cPlayers').textContent = st.playerCount != null ? `${st.playerCount} / ${st.maxPlayers || '?'}` : '–';
+	$('#cDay').textContent = st.day != null ? `Dag ${st.day}` : '–';
+	$('#cFps').textContent = st.fps != null ? st.fps : '–';
+	if (st.uptime != null) {
+		const m = Math.floor(st.uptime / 60);
+		$('#cUp').textContent = m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+	} else $('#cUp').textContent = '–';
+	$('#events').innerHTML = st.events.slice().reverse().map((e) => `<div><span class="t">${fmtTime(e.t)}</span>${escH(e.text)}</div>`).join('') || '<div class="muted">Inget ännu</div>';
+	renderPlayers();
+}
+setInterval(refresh, 3000); refresh();
+
+const act = (url, msg) => async () => { try { await api(url, {}); toast(msg); refresh(); } catch (e) { toast(e.message, true); } };
+$('#btnStart').onclick = act('/api/start', 'Startar servern – första gången tar det några minuter');
+$('#btnStop').onclick = () => confirmBtn($('#btnStop'), act('/api/stop', 'Stoppar och sparar världen'));
+$('#btnRestart').onclick = () => confirmBtn($('#btnRestart'), act('/api/restart', 'Startar om servern'));
+$('#btnSave').onclick = act('/api/save', 'Världen sparad');
+// Dubbelklick-skydd utan dialogrutor: första klicket frågar, andra utför.
+function confirmBtn(btn, fn) {
+	if (btn.dataset.arm) { delete btn.dataset.arm; btn.textContent = btn.dataset.orig; fn(); return; }
+	btn.dataset.orig = btn.textContent; btn.dataset.arm = 1; btn.textContent = 'Klicka igen för att bekräfta';
+	setTimeout(() => { if (btn.dataset.arm) { delete btn.dataset.arm; btn.textContent = btn.dataset.orig; } }, 4000);
+}
+
+// Konsol
+let logFile = null, logOff = -1;
+const logEl = $('#log');
+function addLines(lines, cls) {
+	const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
+	const frag = document.createDocumentFragment();
+	for (const l of lines) {
+		const d = document.createElement('div');
+		d.textContent = l;
+		d.className = cls || (/ ERR |Exception/.test(l) ? 'err' : / WRN /.test(l) ? 'wrn' : '');
+		frag.appendChild(d);
+	}
+	logEl.appendChild(frag);
+	while (logEl.childNodes.length > 2000) logEl.removeChild(logEl.firstChild);
+	if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+}
+async function pollLog() {
+	try {
+		const r = await api(`/api/log?file=${encodeURIComponent(logFile || '')}&offset=${logOff}`);
+		if (r.reset) logEl.innerHTML = '';
+		logFile = r.file; logOff = r.offset;
+		addLines(r.lines);
+		const note = $('#staleNote');
+		// Visa tydligt när loggen är gammal, så att gamla rader inte ser ut som att något pågår.
+		if (r.file && !st.running && r.mtime) { note.style.display = 'block'; note.textContent = `Servern är inte igång – visar senaste loggen från ${new Date(r.mtime).toLocaleString('sv-SE')}`; }
+		else if (!r.file) { note.style.display = 'block'; note.textContent = 'Ingen logg ännu – starta servern.'; }
+		else note.style.display = 'none';
+	} catch {}
+}
+setInterval(pollLog, 1500); pollLog();
+$('#cmdForm').onsubmit = async (e) => {
+	e.preventDefault();
+	const cmd = $('#cmd').value.trim(); if (!cmd) return;
+	$('#cmd').value = '';
+	try { await api('/api/announce', { message: cmd }); addLines(['> ' + cmd], 'me'); toast('Skickat till alla'); }
+	catch (err) { addLines([err.message], 'err'); }
+};
+
+// Spelare
+function renderPlayers() {
+	const ps = st.players || [];
+	$('#noPlayers').style.display = ps.length ? 'none' : 'block';
+	$('#pTable').style.display = ps.length ? 'table' : 'none';
+	$('#pTable tbody').innerHTML = ps.map((p) => `<tr>
+		<td>${escH(p.name)}</td><td>${escH(p.level)}</td><td>${escH(p.buildings ?? '')}</td><td>${escH(p.ping)}</td>
+		<td style="text-align:right;white-space:nowrap">
+			<button class="b" data-a="kick" data-id="${escH(p.userId)}" data-n="${escH(p.name)}">Kicka</button>
+			<button class="b danger" data-a="ban" data-id="${escH(p.userId)}" data-n="${escH(p.name)}">Banna</button>
+		</td></tr>`).join('');
+}
+$('#pTable').onclick = (e) => {
+	const b = e.target.closest('button[data-a]'); if (!b) return;
+	confirmBtn(b, async () => {
+		try { await api('/api/player', { action: b.dataset.a, userId: b.dataset.id, name: b.dataset.n }); toast('Klart'); }
+		catch (err) { toast(err.message, true); }
+	});
+};
+
+// Inställningar
+async function loadSettings() {
+	try {
+		const { fields, values } = await api('/api/settings');
+		const groups = [...new Set(fields.map((f) => f.group))];
+		$('#setFields').innerHTML = groups.map((g) => `<h2 style="grid-column:1/-1">${escH(g)}</h2>` + fields.filter((f) => f.group === g).map((f) => {
+			const v = values[f.key] ?? '';
+			let input;
+			if (f.type === 'select') input = `<select name="${f.key}">${f.options.map(([o, l]) => `<option value="${o}" ${String(v) === o ? 'selected' : ''}>${escH(l)}</option>`).join('')}</select>`;
+			else if (f.type === 'bool') input = `<select name="${f.key}"><option value="True" ${v === 'True' ? 'selected' : ''}>På</option><option value="False" ${v !== 'True' ? 'selected' : ''}>Av</option></select>`;
+			else if (f.type === 'float') {
+				const n = Number(v) || 0;
+				// Reglage och sifferruta hänger ihop; rutan kan gå utanför reglagets intervall.
+				input = `<div style="display:flex;gap:10px;align-items:center"><input type="range" min="${f.min}" max="${f.max}" step="0.1" value="${n}" data-for="${f.key}" style="flex:1;padding:0" /><input name="${f.key}" value="${+n.toFixed(2)}" inputmode="decimal" style="width:80px" /></div>`;
+			} else input = `<input name="${f.key}" value="${escH(v)}" ${f.type === 'int' ? 'inputmode="numeric"' : ''} />`;
+			return `<label><span>${escH(f.label)}</span>${input}</label>`;
+		}).join('')).join('');
+		$('#setFields').querySelectorAll('input[type=range]').forEach((r) => {
+			const box = $('#setFields').querySelector(`input[name="${r.dataset.for}"]`);
+			r.oninput = () => (box.value = r.value);
+			box.oninput = () => (r.value = box.value.replace(',', '.'));
+		});
+	} catch (e) { toast(e.message, true); }
+}
+$('#setForm').onsubmit = async (e) => {
+	e.preventDefault();
+	const values = Object.fromEntries(new FormData(e.target).entries());
+	try { const r = await api('/api/settings', { values }); toast(r.running ? 'Sparat – starta om servern så gäller det' : 'Sparat'); }
+	catch (err) { toast(err.message, true); }
+};
+
+</script>
+</body>
+</html>
