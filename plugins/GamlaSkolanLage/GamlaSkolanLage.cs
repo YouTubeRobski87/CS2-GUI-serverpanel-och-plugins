@@ -12,7 +12,7 @@ using CounterStrikeSharp.API.Modules.Utils;
 namespace GamlaSkolanLage;
 
 // Omröstning om spelläge. Vid matchslut (eller med !lage) får spelarna rösta på
-// Retakes / Deathmatch / 1v1 Arenas. Vinner ett annat läge skickas en begäran till
+// Retakes / Deathmatch / Zombie. Vinner ett annat läge skickas en begäran till
 // Gamla Skolan-panelen, som startar om servern i det nya läget.
 public class LageConfig : BasePluginConfig
 {
@@ -32,7 +32,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     public void OnConfigParsed(LageConfig config) => Config = config;
 
     public override string ModuleName => "Gamla Skolan Lägesomröstning";
-    public override string ModuleVersion => "1.5.2";
+    public override string ModuleVersion => "1.6.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Vote for game mode: !mode / !lage";
 
@@ -44,7 +44,6 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     {
         ("retakes", "Retakes", "RetakesPlugin"),
         ("deathmatch", "Deathmatch", "Deathmatch"),
-        ("arenas", "1v1 Arenas", "K4-Arenas"),
         ("zombie", "Zombie", "ZombieMode"),
     };
 

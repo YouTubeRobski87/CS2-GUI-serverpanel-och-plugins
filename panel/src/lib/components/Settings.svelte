@@ -333,7 +333,7 @@
 							<button class="btn btn-sm" onclick={() => (editing = null)}>{t('Avbryt', 'Cancel')}</button>
 							<button class="btn btn-primary" disabled={saving === 'mode' || !editing.id.trim()} onclick={saveEditing}><Icon name="check" class="size-4" /> {t('Spara läge', 'Save mode')}</button>
 						</div>
-						<p class="text-xs text-dim">{t('Omröstningen i spelet (!lage) känner till Retakes, Deathmatch och 1v1 Arenas. Egna lägen startar du från panelen.', 'The in-game vote (!mode) knows Retakes, Deathmatch and 1v1 Arenas. Custom modes are started from the panel.')}</p>
+						<p class="text-xs text-dim">{t('Omröstningen i spelet (!lage) känner till Retakes, Deathmatch och Zombie. Egna lägen startar du från panelen.', 'The in-game vote (!mode) knows Retakes, Deathmatch and Zombie. Custom modes are started from the panel.')}</p>
 					</div>
 				{/if}
 			</section>

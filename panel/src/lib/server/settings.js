@@ -79,9 +79,11 @@ export function getSettings() {
 		migrated = true;
 	}
 	// Inbyggda lägen: behåll det du sparat, men ta in nya plugins i enable/disable när panelen uppdateras.
-	// Ett inbyggt läge som tagits bort i panelen (removed: true) läggs inte tillbaka.
-	const modes = { ...DEFAULTS.modes, ...(saved.modes || {}) };
-	for (const [id, def] of Object.entries(DEFAULTS.modes)) {
+	// Ett inbyggt läge som tagits bort i panelen (står i removedModes) läggs inte tillbaka.
+	const removed = Array.isArray(saved.removedModes) ? saved.removedModes : [];
+	const defaults = Object.fromEntries(Object.entries(DEFAULTS.modes).filter(([id]) => !removed.includes(id)));
+	const modes = { ...defaults, ...(saved.modes || {}) };
+	for (const [id, def] of Object.entries(defaults)) {
 		const cur = saved.modes?.[id];
 		if (!cur) continue;
 		if (cur.custom) continue; // redigerat för hand i panelen – rör inte listorna
@@ -145,7 +147,8 @@ export function saveMode(id, data) {
 		maps: list(data.maps).filter((m) => /^[\w\-]+$/.test(m)),
 		custom: true
 	};
-	const next = { ...cur, modes: { ...cur.modes, [key]: mode } };
+	const removedModes = (cur.removedModes || []).filter((m) => m !== key);
+	const next = { ...cur, modes: { ...cur.modes, [key]: mode }, removedModes };
 	saveSettings(next);
 	return mode;
 }
@@ -156,7 +159,9 @@ export function deleteMode(id) {
 	if (Object.keys(cur.modes).length <= 1) throw new Error(L('Minst ett läge måste finnas kvar', 'At least one mode must remain'));
 	const modes = { ...cur.modes };
 	delete modes[id];
-	const next = { ...cur, modes };
+	// Inbyggda lägen kommer annars tillbaka nästa gång panelen startar
+	const removedModes = DEFAULTS.modes[id] ? [...new Set([...(cur.removedModes || []), id])] : cur.removedModes || [];
+	const next = { ...cur, modes, removedModes };
 	if (next.defaultMode === id) next.defaultMode = Object.keys(modes)[0];
 	saveSettings(next);
 }
@@ -164,7 +169,8 @@ export function deleteMode(id) {
 export function resetMode(id) {
 	if (!DEFAULTS.modes[id]) throw new Error(L('Bara inbyggda lägen kan återställas', 'Only built-in modes can be reset'));
 	const cur = getSettings();
-	const next = { ...cur, modes: { ...cur.modes, [id]: { ...DEFAULTS.modes[id] } } };
+	const removedModes = (cur.removedModes || []).filter((m) => m !== id);
+	const next = { ...cur, modes: { ...cur.modes, [id]: { ...DEFAULTS.modes[id] } }, removedModes };
 	saveSettings(next);
 }
 
