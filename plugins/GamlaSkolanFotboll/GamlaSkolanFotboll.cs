@@ -1,3 +1,5 @@
+using System.Drawing;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
@@ -36,7 +38,7 @@ public class FotbollConfig : BasePluginConfig
 public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
 {
     public override string ModuleName => "Gamla Skolan Fotboll";
-    public override string ModuleVersion => "1.3.1";
+    public override string ModuleVersion => "1.5.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Fotboll: ingen skada, mål, avspark och vinnare";
 
@@ -57,6 +59,11 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
 
     // Stort meddelande mitt på skärmen. Skickas om varje tick, annars skrivs det över direkt.
     private string? _center;
+
+    // Egna resultattavlor (point_worldtext) som admin placerar ut med !tavla. Sparas per bana i tavlor.json.
+    private readonly List<CPointWorldText> _boards = new();
+    private record BoardPos(float X, float Y, float Z, float Yaw);
+    private Dictionary<string, List<BoardPos>> _boardPos = new();
     private DateTime _centerUntil;
 
     public override void Load(bool hotReload)
@@ -67,6 +74,7 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         RegisterListener<Listeners.OnMapStart>(_ => ResetMatch(clearBallStart: true));
         AddTimer(0.1f, Tick, TimerFlags.REPEAT);
         RegisterListener<Listeners.OnTick>(OnTickCenter);
+        LoadBoardPositions();
         if (hotReload) ResetMatch(clearBallStart: true);
     }
 
@@ -124,6 +132,117 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         if (DateTime.UtcNow > _centerUntil) { _center = null; return; }
         foreach (var p in Utilities.GetPlayers())
             if (p is { IsValid: true, IsBot: false }) p.PrintToCenterHtml(_center);
+    }
+
+    private string BoardFile => Path.Combine(ModuleDirectory, "tavlor.json");
+
+    private void LoadBoardPositions()
+    {
+        try
+        {
+            if (File.Exists(BoardFile))
+                _boardPos = JsonSerializer.Deserialize<Dictionary<string, List<BoardPos>>>(File.ReadAllText(BoardFile)) ?? new();
+        }
+        catch (Exception ex) { Logger.LogWarning("Kunde inte läsa tavlor.json: {Msg}", ex.Message); }
+    }
+
+    private void SaveBoardPositions()
+    {
+        try { File.WriteAllText(BoardFile, JsonSerializer.Serialize(_boardPos, new JsonSerializerOptions { WriteIndented = true })); }
+        catch (Exception ex) { Logger.LogWarning("Kunde inte spara tavlor.json: {Msg}", ex.Message); }
+    }
+
+    private string BoardText() => $"CT  {_scoreCt}  -  {_scoreT}  T";
+
+    private CPointWorldText? SpawnBoard(BoardPos b)
+    {
+        var wt = Utilities.CreateEntityByName<CPointWorldText>("point_worldtext");
+        if (wt == null) return null;
+        wt.MessageText = BoardText();
+        wt.Enabled = true;
+        wt.FontSize = 120;
+        wt.Fullbright = true;
+        wt.WorldUnitsPerPx = 0.25f;
+        wt.Color = Color.White;
+        wt.JustifyHorizontal = PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER;
+        wt.JustifyVertical = PointWorldTextJustifyVertical_t.POINT_WORLD_TEXT_JUSTIFY_VERTICAL_CENTER;
+        wt.DrawBackground = true;
+        wt.BackgroundBorderWidth = 2f;
+        wt.BackgroundBorderHeight = 1f;
+        wt.DispatchSpawn();
+        wt.Teleport(new Vector(b.X, b.Y, b.Z), new QAngle(0, b.Yaw + 270f, 90f), new Vector(0, 0, 0));
+        return wt;
+    }
+
+    private void SpawnBoards()
+    {
+        foreach (var b in _boards) if (b.IsValid) b.Remove();
+        _boards.Clear();
+        if (!IsFootballMode()) return;
+        if (!_boardPos.TryGetValue(Server.MapName, out var list)) return;
+        foreach (var b in list) { var wt = SpawnBoard(b); if (wt != null) _boards.Add(wt); }
+    }
+
+    private void UpdateBoards()
+    {
+        var text = BoardText();
+        foreach (var b in _boards)
+        {
+            if (!b.IsValid) continue;
+            b.MessageText = text;
+            Utilities.SetStateChanged(b, "CPointWorldText", "m_messageText");
+        }
+    }
+
+    [ConsoleCommand("css_tavla", "Sätter en resultattavla där du tittar (fotboll)")]
+    [RequiresPermissions("@css/root")]
+    public void OnBoardAdd(CCSPlayerController? caller, CounterStrikeSharp.API.Modules.Commands.CommandInfo cmd)
+    {
+        var pawn = caller?.PlayerPawn.Value;
+        if (caller == null || pawn == null || pawn.AbsOrigin == null) { cmd.ReplyToCommand("Kör kommandot i spelet."); return; }
+        var eye = pawn.EyeAngles;
+        float yaw = eye.Y;
+        float rad = yaw * MathF.PI / 180f;
+        // 120 enheter framför dig, i ögonhöjd + lite till
+        var pos = new BoardPos(pawn.AbsOrigin.X + MathF.Cos(rad) * 120f, pawn.AbsOrigin.Y + MathF.Sin(rad) * 120f, pawn.AbsOrigin.Z + 90f, yaw);
+        if (!_boardPos.TryGetValue(Server.MapName, out var list)) { list = new(); _boardPos[Server.MapName] = list; }
+        list.Add(pos);
+        SaveBoardPositions();
+        SpawnBoards();
+        cmd.ReplyToCommand($" {ChatColors.Gold}Tavla {list.Count} sparad.{ChatColors.Default} Ta bort alla med !tavla_bort");
+    }
+
+    [ConsoleCommand("css_tavla_bort", "Tar bort alla resultattavlor på banan")]
+    [RequiresPermissions("@css/root")]
+    public void OnBoardClear(CCSPlayerController? caller, CounterStrikeSharp.API.Modules.Commands.CommandInfo cmd)
+    {
+        _boardPos.Remove(Server.MapName);
+        SaveBoardPositions();
+        SpawnBoards();
+        cmd.ReplyToCommand("Alla tavlor borttagna.");
+    }
+
+    // Skickar en input till alla entiteter med ett visst namn på banan (t.ex. fyrverkerier och visselpipa)
+    private static void FireNamed(string name, string input)
+    {
+        foreach (var e in Utilities.GetAllEntities())
+        {
+            if (!string.Equals(NameOf(e), name, StringComparison.OrdinalIgnoreCase)) continue;
+            try { e.AcceptInput(input); } catch { /* entiteten tar inte emot den inputen */ }
+        }
+    }
+
+    // Lagens poäng överst på skärmen (HUD) följer målen
+    private void SetTeamScores()
+    {
+        UpdateBoards();
+        foreach (var t in Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager"))
+        {
+            if (t.TeamNum == (int)CsTeam.CounterTerrorist) t.Score = _scoreCt;
+            else if (t.TeamNum == (int)CsTeam.Terrorist) t.Score = _scoreT;
+            else continue;
+            Utilities.SetStateChanged(t, "CTeam", "m_iScore");
+        }
     }
 
     private static void PlayToAll(string sound)
@@ -206,6 +325,11 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         else text = $"Självmål av {ChatColors.Red}{who.PlayerName}{ChatColors.Default} – poäng till {TeamColor(scoring)}{Team(scoring)}{ChatColors.Default}!";
 
         PlayToAll(Config.GoalSound);
+        // Banans egna målfirande: fyrverkerier och smäll vid målet
+        var side = scoring == CsTeam.CounterTerrorist ? "CT" : "T";
+        FireNamed($"{side}SCORE", "Start");
+        FireNamed($"{side}SCOREEX", "Explode");
+        SetTeamScores();
         Server.PrintToChatAll($" {ChatColors.Gold}⚽ MÅL!{ChatColors.Default} {text}");
         Server.PrintToChatAll(ScoreLine());
         var centerWho = who == null ? Team(scoring) : who.PlayerName;
@@ -250,6 +374,10 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         }
 
         _lastTouch = null; _prevTouch = null;
+        FireNamed("CTSCORE", "Stop");
+        FireNamed("TSCORE", "Stop");
+        FireNamed("whistle", "StartSound");
+        SetTeamScores();
         Server.PrintToChatAll($" {ChatColors.Gold}⚽ Avspark!{ChatColors.Default}{ScoreLine()}");
         // Kort spärr så att bollen hinner landa på mittpunkten innan mål räknas igen
         AddTimer(1.5f, () => _goalLock = false);
@@ -264,6 +392,7 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         // Entiteterna kan skapas om vid ny runda – leta upp dem igen
         _ball = null;
         AddTimer(0.2f, FindEntities);
+        AddTimer(0.5f, () => { SpawnBoards(); SetTeamScores(); });
         return HookResult.Continue;
     }
 
