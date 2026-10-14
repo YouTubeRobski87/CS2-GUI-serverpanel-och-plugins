@@ -21,6 +21,9 @@ public class FotbollConfig : BasePluginConfig
     [JsonPropertyName("KickoffDelay")] public float KickoffDelay { get; set; } = 4f;
     // Hur nära bollen (enheter) en spelare ska vara för att räknas som den som rörde den senast
     [JsonPropertyName("TouchDistance")] public float TouchDistance { get; set; } = 90f;
+    // Ljud som spelas för alla vid mål och vinst (sökväg till en .vsnd i spelet, tomt = inget ljud)
+    [JsonPropertyName("GoalSound")] public string GoalSound { get; set; } = "sounds/ui/xp_levelup.vsnd_c";
+    [JsonPropertyName("WinSound")] public string WinSound { get; set; } = "sounds/music/valve_csgo_01/roundmvpanthem_01.vsnd_c";
 }
 
 // Fotbollsläget (CS2 Football-banan, game_type 3):
@@ -32,7 +35,7 @@ public class FotbollConfig : BasePluginConfig
 public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
 {
     public override string ModuleName => "Gamla Skolan Fotboll";
-    public override string ModuleVersion => "1.1.0";
+    public override string ModuleVersion => "1.2.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Fotboll: ingen skada, mål, avspark och vinnare";
 
@@ -101,6 +104,13 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         _lastTouch = null; _prevTouch = null;
         if (clearBallStart) { _ballStart = null; _ballStartAng = null; }
         _ball = null; _goalCt = null; _goalT = null;
+    }
+
+    private static void PlayToAll(string sound)
+    {
+        if (string.IsNullOrWhiteSpace(sound)) return;
+        foreach (var p in Utilities.GetPlayers().Where(p => p is { IsValid: true, IsBot: false }))
+            p.ExecuteClientCommand($"play {sound}");
     }
 
     private static string Team(CsTeam t) => t == CsTeam.CounterTerrorist ? "CT" : "T";
@@ -175,6 +185,7 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         else if (who.Team == scoring) text = $"{TeamColor(scoring)}{who.PlayerName}{ChatColors.Default} gör mål för {TeamColor(scoring)}{Team(scoring)}{ChatColors.Default}!";
         else text = $"Självmål av {ChatColors.Red}{who.PlayerName}{ChatColors.Default} – poäng till {TeamColor(scoring)}{Team(scoring)}{ChatColors.Default}!";
 
+        PlayToAll(Config.GoalSound);
         Server.PrintToChatAll($" {ChatColors.Gold}⚽ MÅL!{ChatColors.Default} {text}");
         Server.PrintToChatAll(ScoreLine());
         var centerWho = who == null ? Team(scoring) : who.PlayerName;
@@ -187,6 +198,7 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
             var winner = _scoreCt >= Config.GoalsToWin ? CsTeam.CounterTerrorist : CsTeam.Terrorist;
             AddTimer(2f, () =>
             {
+                PlayToAll(Config.WinSound);
                 Server.PrintToChatAll($" {ChatColors.Gold}🏆 {TeamColor(winner)}{Team(winner)}{ChatColors.Gold} vinner matchen!{ChatColors.Default}{ScoreLine()}");
                 foreach (var p in Utilities.GetPlayers().Where(p => p is { IsValid: true, IsBot: false }))
                     p.PrintToCenterHtml($"<font color='#f5c542' class='fontSize-xl'>🏆 {Team(winner)} VINNER!</font><br><font color='#5fa8ff'>CT {_scoreCt}</font> – <font color='#ffd34d'>{_scoreT} T</font><br>Ny match börjar strax", 6);
