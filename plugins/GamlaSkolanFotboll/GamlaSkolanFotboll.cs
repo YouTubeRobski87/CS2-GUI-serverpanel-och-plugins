@@ -36,7 +36,7 @@ public class FotbollConfig : BasePluginConfig
 public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
 {
     public override string ModuleName => "Gamla Skolan Fotboll";
-    public override string ModuleVersion => "1.2.2";
+    public override string ModuleVersion => "1.3.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Fotboll: ingen skada, mål, avspark och vinnare";
 
@@ -55,6 +55,10 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
     private CCSPlayerController? _lastTouch;
     private CCSPlayerController? _prevTouch;
 
+    // Stort meddelande mitt på skärmen. Skickas om varje tick, annars skrivs det över direkt.
+    private string? _center;
+    private DateTime _centerUntil;
+
     public override void Load(bool hotReload)
     {
         RegisterListener<Listeners.OnEntityTakeDamagePre>((victim, info) =>
@@ -62,6 +66,7 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         HookEntityOutput("*", "OnStartTouch", OnStartTouch, HookMode.Post);
         RegisterListener<Listeners.OnMapStart>(_ => ResetMatch(clearBallStart: true));
         AddTimer(0.1f, Tick, TimerFlags.REPEAT);
+        RegisterListener<Listeners.OnTick>(OnTickCenter);
         if (hotReload) ResetMatch(clearBallStart: true);
     }
 
@@ -105,6 +110,20 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         _lastTouch = null; _prevTouch = null;
         if (clearBallStart) { _ballStart = null; _ballStartAng = null; }
         _ball = null; _goalCt = null; _goalT = null;
+    }
+
+    private void ShowCenter(string html, float seconds)
+    {
+        _center = html;
+        _centerUntil = DateTime.UtcNow.AddSeconds(seconds);
+    }
+
+    private void OnTickCenter()
+    {
+        if (_center == null) return;
+        if (DateTime.UtcNow > _centerUntil) { _center = null; return; }
+        foreach (var p in Utilities.GetPlayers())
+            if (p is { IsValid: true, IsBot: false }) p.PrintToCenterHtml(_center);
     }
 
     private static void PlayToAll(string sound)
@@ -190,8 +209,7 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         Server.PrintToChatAll($" {ChatColors.Gold}⚽ MÅL!{ChatColors.Default} {text}");
         Server.PrintToChatAll(ScoreLine());
         var centerWho = who == null ? Team(scoring) : who.PlayerName;
-        foreach (var p in Utilities.GetPlayers().Where(p => p is { IsValid: true, IsBot: false }))
-            p.PrintToCenterHtml($"<font color='#f5c542' class='fontSize-xl'>⚽ MÅL!</font><br>{System.Net.WebUtility.HtmlEncode(centerWho)}<br><font color='#5fa8ff'>CT {_scoreCt}</font> – <font color='#ffd34d'>{_scoreT} T</font>", 4);
+        ShowCenter($"<font color='#f5c542' class='fontSize-xl'>⚽ MÅL!</font><br>{System.Net.WebUtility.HtmlEncode(centerWho)}<br><font color='#5fa8ff'>CT {_scoreCt}</font> – <font color='#ffd34d'>{_scoreT} T</font>", Config.KickoffDelay);
         Logger.LogInformation("Mål för {Team} ({Who}), CT {Ct} – T {T}", Team(scoring), who?.PlayerName ?? "-", _scoreCt, _scoreT);
 
         if (_scoreCt >= Config.GoalsToWin || _scoreT >= Config.GoalsToWin)
@@ -201,8 +219,7 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
             {
                 PlayToAll(Config.WinSound);
                 Server.PrintToChatAll($" {ChatColors.Gold}🏆 {TeamColor(winner)}{Team(winner)}{ChatColors.Gold} vinner matchen!{ChatColors.Default}{ScoreLine()}");
-                foreach (var p in Utilities.GetPlayers().Where(p => p is { IsValid: true, IsBot: false }))
-                    p.PrintToCenterHtml($"<font color='#f5c542' class='fontSize-xl'>🏆 {Team(winner)} VINNER!</font><br><font color='#5fa8ff'>CT {_scoreCt}</font> – <font color='#ffd34d'>{_scoreT} T</font><br>Ny match börjar strax", 6);
+                ShowCenter($"<font color='#f5c542' class='fontSize-xl'>🏆 {Team(winner)} VINNER!</font><br><font color='#5fa8ff'>CT {_scoreCt}</font> – <font color='#ffd34d'>{_scoreT} T</font><br>Ny match börjar strax", 6f);
             });
             AddTimer(Config.KickoffDelay + 4f, () =>
             {
