@@ -3,6 +3,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
 using CounterStrikeSharp.API.Modules.Memory;
@@ -35,7 +36,7 @@ public class FotbollConfig : BasePluginConfig
 public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
 {
     public override string ModuleName => "Gamla Skolan Fotboll";
-    public override string ModuleVersion => "1.2.1";
+    public override string ModuleVersion => "1.2.2";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Fotboll: ingen skada, mål, avspark och vinnare";
 
@@ -254,6 +255,24 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
     {
         _scoreCt = 0; _scoreT = 0; _goalLock = false;
         return HookResult.Continue;
+    }
+
+    // Felsökning: listar alla namngivna entiteter på banan (för att hitta resultattavlorna)
+    [ConsoleCommand("css_fotboll_ents", "Listar namngivna entiteter på banan")]
+    [RequiresPermissions("@css/root")]
+    public void OnEnts(CCSPlayerController? caller, CounterStrikeSharp.API.Modules.Commands.CommandInfo cmd)
+    {
+        var lines = new List<string>();
+        foreach (var e in Utilities.GetAllEntities())
+        {
+            var n = NameOf(e);
+            if (string.IsNullOrEmpty(n)) continue;
+            lines.Add($"{n} | {e.DesignerName}");
+        }
+        lines.Sort(StringComparer.OrdinalIgnoreCase);
+        var file = Path.Combine(ModuleDirectory, "entiteter.txt");
+        File.WriteAllLines(file, lines);
+        cmd.ReplyToCommand($"{lines.Count} namngivna entiteter sparade i {file}");
     }
 
     [ConsoleCommand("css_fotboll", "Visar ställningen i fotboll")]
