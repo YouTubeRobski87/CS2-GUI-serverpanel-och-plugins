@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn, execFile } from 'node:child_process';
 import { getSettings, paths, readGslt, L } from './settings.js';
-import { bridgeAlive, send } from './bridge.js';
+import { bridgeAlive, send, exec } from './bridge.js';
 import { log } from './events.js';
 
 const isWin = process.platform === 'win32';
@@ -306,6 +306,14 @@ export async function startServer(modeId) {
 			if (!ok) log('warn', L('MariaDB startade inte – K4-Arenas kan inte spara vapenval.', 'MariaDB did not start – K4-Arenas cannot save weapon choices.'));
 		}
 		let args = mode.args.replace('{port}', String(s.port)).replace('{gslt}', gslt);
+		// En workshopbana kan inte laddas direkt vid start: servern loggar in hos Steam först när en
+		// bana är igång, och host_workshop_map behöver den inloggningen. Starta därför på en vanlig
+		// bana och byt till workshopbanan när servern är uppe.
+		let workshopMap = null;
+		args = args.replace(/\+host_workshop_map\s+(\d{6,12})/, (_, ws) => {
+			workshopMap = ws;
+			return '+map de_dust2';
+		});
 		// Starta i ett eget konsolfönster, precis som bat-filerna. Panelen kan stängas utan att servern dör.
 		const cmdline = `/c start "CS2 Server - ${mode.name}" /D "${P.bin}" cs2.exe ${args}`;
 		const child = spawn('cmd.exe', [cmdline], {
@@ -323,6 +331,7 @@ export async function startServer(modeId) {
 		}
 		if (!state.running) throw new Error(L('Servern startade inte – kolla konsolfönstret som öppnades.', 'The server did not start – check the console window that opened.'));
 		log('ok', L(`Servern är igång (PID ${state.pid})`, `Server is running (PID ${state.pid})`));
+		if (workshopMap) loadWorkshopWhenReady(workshopMap);
 	} catch (e) {
 		state.lastError = e.message;
 		log('error', e.message);
@@ -330,6 +339,25 @@ export async function startServer(modeId) {
 	} finally {
 		state.busy = null;
 	}
+}
+
+// Väntar tills bryggpluginen svarar (banan är igång och servern inloggad) och byter sedan till workshopbanan.
+async function loadWorkshopWhenReady(ws) {
+	log('map', L(`Laddar workshopbanan ${ws} så fort servern är uppe…`, `Loading workshop map ${ws} as soon as the server is up…`));
+	for (let i = 0; i < 60; i++) {
+		await sleep(2000);
+		if (!state.running) return;
+		if (!bridgeAlive()) continue;
+		await sleep(4000);
+		try {
+			await exec(`host_workshop_map ${ws}`);
+			log('ok', L(`Byter till workshopbanan ${ws} (första gången laddas den ner, det kan ta en stund)`, `Switching to workshop map ${ws} (the first time it is downloaded, which can take a while)`));
+		} catch (e) {
+			log('error', L(`Kunde inte byta till workshopbanan ${ws}: ${e.message}`, `Could not switch to workshop map ${ws}: ${e.message}`));
+		}
+		return;
+	}
+	log('warn', L(`Servern svarade inte i tid – byt till ${ws} under Byt karta.`, `The server did not respond in time – switch to ${ws} under Change map.`));
 }
 
 export async function stopServer() {
