@@ -69,13 +69,13 @@ export async function POST({ params, request }) {
 	try {
 		switch (params.path) {
 			case 'start':
-				startServer(body.mode).catch(() => {});
+				startServer(body.mode, body.map).catch(() => {});
 				return json({ ok: true });
 			case 'stop':
 				await stopServer();
 				return json({ ok: true });
 			case 'restart':
-				restartServer(body.mode).catch(() => {});
+				restartServer(body.mode, body.map).catch(() => {});
 				return json({ ok: true });
 			case 'mode':
 				return json({ ok: true, changes: applyMode(body.mode) });

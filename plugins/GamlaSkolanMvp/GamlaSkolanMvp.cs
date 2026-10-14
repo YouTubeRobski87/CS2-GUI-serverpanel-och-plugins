@@ -25,7 +25,7 @@ public class MvpConfig : BasePluginConfig
 public class GamlaSkolanMvpPlugin : BasePlugin, IPluginConfig<MvpConfig>
 {
     public override string ModuleName => "Gamla Skolan MVP";
-    public override string ModuleVersion => "1.2.0";
+    public override string ModuleVersion => "1.3.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "First to X kills in deathmatch is MVP, then the map changes.";
 
@@ -134,7 +134,7 @@ public class GamlaSkolanMvpPlugin : BasePlugin, IPluginConfig<MvpConfig>
         AddTimer(Config.CelebrationSeconds + 0.5f, () =>
         {
             Logger.LogInformation("MVP {Name} nadde {Limit} kills pa {Map}, byter till {Next}", name, Config.KillLimit, current, next ?? "(samma karta)");
-            Server.ExecuteCommand($"changelevel {next ?? current}");
+            Server.ExecuteCommand(MapCommand(next ?? current));
         }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
@@ -159,19 +159,47 @@ public class GamlaSkolanMvpPlugin : BasePlugin, IPluginConfig<MvpConfig>
         }
     }
 
+    // Lägets kartlista från panelen (data/gs_panel/current_mode.json, fältet "maps").
+    private List<string> PanelMaps()
+    {
+        try
+        {
+            var file = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "data", "gs_panel", "current_mode.json"));
+            if (!File.Exists(file)) return new();
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file).TrimStart('\uFEFF'));
+            if (!doc.RootElement.TryGetProperty("maps", out var arr) || arr.ValueKind != System.Text.Json.JsonValueKind.Array) return new();
+            return arr.EnumerateArray().Where(e => e.ValueKind == System.Text.Json.JsonValueKind.String)
+                .Select(e => (e.GetString() ?? "").Trim()).Where(m => m.Length > 0).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Kunde inte lasa panelens kartlista");
+            return new();
+        }
+    }
+
+    // Workshopbanor (bara siffror) laddas med host_workshop_map, vanliga banor med changelevel.
+    private static string MapCommand(string map) =>
+        map.All(char.IsDigit) ? $"host_workshop_map {map}" : $"changelevel {map}";
+
     private string? NextMap(string current)
     {
         try
         {
-            string[] candidates =
+            // 1) Panelens kartlista för läget  2) reserv: mapcycle-filen
+            var maps = PanelMaps();
+            if (maps.Count == 0)
             {
-                Path.Combine(Server.GameDirectory, "csgo", Config.MapCycleFile),
-                Path.Combine(Server.GameDirectory, Config.MapCycleFile),
-            };
-            var file = candidates.FirstOrDefault(File.Exists);
-            if (file == null) return null;
-            var maps = File.ReadAllLines(file).Select(l => l.Trim())
-                .Where(l => l.Length > 0 && !l.StartsWith("//")).ToList();
+                string[] candidates =
+                {
+                    Path.Combine(Server.GameDirectory, "csgo", Config.MapCycleFile),
+                    Path.Combine(Server.GameDirectory, Config.MapCycleFile),
+                };
+                var file = candidates.FirstOrDefault(File.Exists);
+                if (file == null) return null;
+                maps = File.ReadAllLines(file).Select(l => l.Trim())
+                    .Where(l => l.Length > 0 && !l.StartsWith("//")).ToList();
+            }
             if (maps.Count == 0) return null;
             int i = maps.FindIndex(m => m.Equals(current, StringComparison.OrdinalIgnoreCase));
             return i >= 0 ? maps[(i + 1) % maps.Count] : maps[0];

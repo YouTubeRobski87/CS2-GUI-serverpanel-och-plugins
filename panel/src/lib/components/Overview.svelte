@@ -19,6 +19,11 @@
 	let mode = $derived(selectedMode ?? st.mode ?? st.modes[0]?.id);
 	let modeInfo = $derived(st.modes.find((m) => m.id === mode));
 	let activeMode = $derived(st.modes.find((m) => m.id === st.mode));
+	// Kartlistan: lägets som körs, eller det valda lägets när servern är avstängd (då blir det startkartan).
+	let mapList = $derived((st.running ? activeMode?.maps : modeInfo?.maps) ?? []);
+	$effect(() => {
+		if (mapPick && !mapList.includes(mapPick)) mapPick = '';
+	});
 	let humans = $derived(live?.players?.filter((p) => !p.bot) ?? []);
 	let bots = $derived(live?.players?.filter((p) => p.bot) ?? []);
 	let hist = $derived(st.history ?? []);
@@ -53,7 +58,7 @@
 		}
 	}
 
-	const start = () => act('start', { mode }, t(`Startar ${modeInfo?.name}…`, `Starting ${modeInfo?.name}…`));
+	const start = () => act('start', { mode, map: mapPick || undefined }, mapPick ? t(`Startar ${modeInfo?.name} på ${mapPick}…`, `Starting ${modeInfo?.name} on ${mapPick}…`) : t(`Startar ${modeInfo?.name}…`, `Starting ${modeInfo?.name}…`));
 	const stop = () => act('stop', {}, t('Servern är stoppad', 'Server stopped'));
 	const restart = () => act('restart', { mode }, mode !== st.mode ? t(`Startar om i läget ${modeInfo?.name}…`, `Restarting in ${modeInfo?.name} mode…`) : t('Startar om servern…', 'Restarting server…'));
 
@@ -192,12 +197,17 @@
 			<div>
 				<div class="label mb-2">{t('Byt karta', 'Change map')}</div>
 				<div class="flex gap-2">
-					<select class="input" bind:value={mapPick} disabled={!st.running}>
-						<option value="">{t('Välj karta…', 'Choose map…')}</option>
-						{#each activeMode?.maps ?? [] as m}<option value={m}>{m}</option>{/each}
+					<select class="input" bind:value={mapPick} disabled={busy || mapList.length === 0}>
+						<option value="">{st.running ? t('Välj karta…', 'Choose map…') : t('Startkarta: lägets standard', 'Start map: mode default')}</option>
+						{#each mapList as m}<option value={m}>{m}</option>{/each}
 					</select>
-					<button class="btn" disabled={!st.running || !mapPick || busy} onclick={() => changeMap(mapPick)}>{t('Byt', 'Change')}</button>
+					{#if st.running}
+						<button class="btn" disabled={!mapPick || busy} onclick={() => changeMap(mapPick)}>{t('Byt', 'Change')}</button>
+					{/if}
 				</div>
+				{#if !st.running}
+					<div class="text-[12px] text-dim mt-1">{t(`Kartor för ${modeInfo?.name ?? ''} – servern startar på den du väljer.`, `Maps for ${modeInfo?.name ?? ''} – the server starts on the one you pick.`)}</div>
+				{/if}
 				<div class="flex gap-2 mt-2">
 					<input class="input" placeholder={t('Workshop-ID', 'Workshop ID')} bind:value={workshop} disabled={!st.running} />
 					<button class="btn" disabled={!st.running || !workshop || busy} onclick={() => changeMap(workshop)}>{t('Ladda', 'Load')}</button>

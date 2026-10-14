@@ -189,7 +189,9 @@ function writeStartedMode(id) {
 	try {
 		const file = startedModeFile();
 		fs.mkdirSync(path.dirname(file), { recursive: true });
-		fs.writeFileSync(file, JSON.stringify({ mode: id, t: new Date().toISOString() }));
+		// Lägets kartlista följer med, så att kartrotationen i spelet (GamlaSkolanMvp) använder just det lägets kartor.
+		const maps = getSettings().modes[id]?.maps ?? [];
+		fs.writeFileSync(file, JSON.stringify({ mode: id, maps, t: new Date().toISOString() }));
 	} catch (e) {
 		log('warn', L(`Kunde inte spara aktuellt läge: ${e.message}`, `Could not save current mode: ${e.message}`));
 	}
@@ -311,7 +313,7 @@ function sleep(ms) {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
-export async function startServer(modeId) {
+export async function startServer(modeId, startMap = '') {
 	if (state.busy) throw new Error(L('Panelen håller redan på med något – vänta lite.', 'The panel is busy – wait a moment.'));
 	await probe();
 	if (state.running) throw new Error(L('Servern körs redan.', 'The server is already running.'));
@@ -336,6 +338,14 @@ export async function startServer(modeId) {
 			if (!ok) log('warn', L('MariaDB startade inte – K4-Arenas kan inte spara vapenval.', 'MariaDB did not start – K4-Arenas cannot save weapon choices.'));
 		}
 		let args = mode.args.replace('{port}', String(s.port)).replace('{gslt}', gslt);
+		// Vald startkarta från panelen ersätter lägets standardkarta.
+		const pick = String(startMap || '').trim();
+		if (pick && (/^\d{6,12}$/.test(pick) || /^[\w\-]+$/.test(pick))) {
+			const token = /^\d{6,12}$/.test(pick) ? `+host_workshop_map ${pick}` : `+map ${pick}`;
+			args = args.replace(/\+(?:map|host_workshop_map)\s+\S+/g, '').replace(/\s{2,}/g, ' ').trim();
+			args = /\+exec\s/.test(args) ? args.replace(/\+exec\s/, `${token} +exec `) : `${args} ${token}`;
+			log('server', L(`Startkarta: ${pick}`, `Start map: ${pick}`));
+		}
 		// En workshopbana kan inte laddas direkt vid start: servern loggar in hos Steam först när en
 		// bana är igång, och host_workshop_map behöver den inloggningen. Starta därför på en vanlig
 		// bana och byt till workshopbanan när servern är uppe.
