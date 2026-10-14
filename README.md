@@ -220,11 +220,11 @@ Används men ingår inte i repot (egna licenser). Byggs mot samma CounterStrikeS
 | Plugin | Källa | Ändringar för Gamla Skolan |
 |---|---|---|
 | Metamod:Source + CounterStrikeSharp | sourcemm.net, roflmuffin/CounterStrikeSharp | – |
-| AdminPlus | – | – |
-| Deathmatch (NockyCZ-fork) | – | – |
-| K4-Arenas + Bots | – | – |
-| QuakeSounds | – | – |
-| MultiAddonManager | – | Extra addon 3461824328 |
+| CS2-SimpleAdmin (+ MenuManager, PlayerSettings, AnyBaseLib) | daffyyyy/CS2-SimpleAdmin, NickFox007 | Ersätter AdminPlus. `!admin`, `!rcon`, `!wsmap`. StealthModule tas bort (den gömmer admins automatiskt) |
+| Deathmatch | NockyCZ/CS2-Deathmatch | `Custom Modes: false` – alltid vanlig DM utan specialrundor |
+| K4-Arenas + Bots | K4ryuu/K4-Arenas | Läget 1v1 Arenas är borttaget från panelen |
+| QuakeSounds | Kandru/cs2-quake-sounds | Double Kill … Holy Shit, Headshot, knivdöd (ljud från workshop-addon 3461824328) |
+| MultiAddonManager | Source2ZE/MultiAddonManager | `mm_extra_addons "3461824328"` (Quake-ljuden) |
 | **RetakesPlugin** 3.1.1 | B3none/cs2-retakes | Svensk översättning som standard (`server-config/lang`), egen `retakes.cfg` med bottar |
 | **Instadefuse** | B3none/cs2-instadefuse | Svenska texter |
 | **Clutch Announce** | B3none/cs2-clutch-announce | Svenska texter, räknar 1v2 i stället för minst 1v3 (`MinPlayers = 2`) |
