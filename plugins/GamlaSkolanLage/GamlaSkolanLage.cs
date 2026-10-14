@@ -32,7 +32,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     public void OnConfigParsed(LageConfig config) => Config = config;
 
     public override string ModuleName => "Gamla Skolan Lägesomröstning";
-    public override string ModuleVersion => "1.6.0";
+    public override string ModuleVersion => "1.6.1";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Vote for game mode: !mode / !lage";
 
@@ -253,6 +253,8 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
         var humans = Humans();
         if (humans.Count == 0) return;
         _current = CurrentMode();
+        // Egna lägen från panelen (Fotboll, Prop Hunt …) har ingen omröstning – de byts från panelen
+        if (_current == "" && auto) return;
 
         _options = new List<(string, string)>();
         if (_current != "") _options.Add((_current, T($"Fortsätt {NameOf(_current)}", $"Keep {NameOf(_current)}")));
