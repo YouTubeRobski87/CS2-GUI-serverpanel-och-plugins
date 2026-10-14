@@ -25,6 +25,18 @@ public class FotbollConfig : BasePluginConfig
     // Hur nära bollen (enheter) en spelare ska vara för att räknas som den som rörde den senast
     [JsonPropertyName("TouchDistance")] public float TouchDistance { get; set; } = 90f;
     // Ljud som spelas för alla vid mål och vinst (sökväg till en .vsnd i spelet, tomt = inget ljud)
+    // Inställningar som körs när en fotbollsbana (med BALL) laddas. Ligger här i stället för i
+    // gamemode_custom_server.cfg så att andra Custom-lägen (t.ex. Prop Hunt) inte får fotbollsreglerna.
+    [JsonPropertyName("FootballCommands")] public List<string> FootballCommands { get; set; } = new()
+    {
+        "mp_autoteambalance 1", "mp_limitteams 1", "mp_startmoney 0", "mp_buytime 0", "mp_freezetime 1",
+        "mp_roundtime 60", "mp_warmuptime 0", "mp_forcecamera 0", "mp_solid_teammates 1", "mp_friendlyfire 0",
+        "mp_spawnprotectiontime 0", "mp_round_restart_delay 5", "mp_ignore_round_win_conditions 1",
+        "mp_match_end_restart 1", "mp_match_end_changelevel 0", "mp_endmatch_votenextmap 0",
+        "mp_ct_default_secondary \"\"", "mp_t_default_secondary \"\"", "mp_ct_default_primary \"\"", "mp_t_default_primary \"\"",
+        "mp_weapons_allow_map_placed 0", "mp_free_armor 0", "mp_death_drop_gun 0",
+        "bot_quota 0", "bot_kick"
+    };
     [JsonPropertyName("GoalSound")] public string GoalSound { get; set; } = "sounds/ui/xp_levelup.vsnd_c";
     [JsonPropertyName("WinSound")] public string WinSound { get; set; } = "sounds/music/valve_cs2_01/roundmvpanthem_01.vsnd_c";
 }
@@ -38,7 +50,7 @@ public class FotbollConfig : BasePluginConfig
 public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
 {
     public override string ModuleName => "Gamla Skolan Fotboll";
-    public override string ModuleVersion => "1.5.0";
+    public override string ModuleVersion => "1.6.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Fotboll: ingen skada, mål, avspark och vinnare";
 
@@ -59,6 +71,7 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
 
     // Stort meddelande mitt på skärmen. Skickas om varje tick, annars skrivs det över direkt.
     private string? _center;
+    private DateTime _lastSearch = DateTime.MinValue;
 
     // Egna resultattavlor (point_worldtext) som admin placerar ut med !tavla. Sparas per bana i tavlor.json.
     private readonly List<CPointWorldText> _boards = new();
@@ -69,9 +82,9 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
     public override void Load(bool hotReload)
     {
         RegisterListener<Listeners.OnEntityTakeDamagePre>((victim, info) =>
-            IsFootballMode() && victim != null && victim.DesignerName == "player" ? HookResult.Handled : HookResult.Continue);
+            Active && victim != null && victim.DesignerName == "player" ? HookResult.Handled : HookResult.Continue);
         HookEntityOutput("*", "OnStartTouch", OnStartTouch, HookMode.Post);
-        RegisterListener<Listeners.OnMapStart>(_ => ResetMatch(clearBallStart: true));
+        RegisterListener<Listeners.OnMapStart>(_ => { ResetMatch(clearBallStart: true); _lastSearch = DateTime.MinValue; });
         AddTimer(0.1f, Tick, TimerFlags.REPEAT);
         RegisterListener<Listeners.OnTick>(OnTickCenter);
         LoadBoardPositions();
@@ -104,6 +117,9 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         }
         if (_ball != null && _ball.IsValid && _ballStart == null && _ball.AbsOrigin != null)
         {
+            // Första gången bollen hittas på banan: slå på fotbollsreglerna
+            foreach (var c in Config.FootballCommands) Server.ExecuteCommand(c);
+            Logger.LogInformation("Fotbollsbana hittad – fotbollsreglerna är på");
             _ballStart = new Vector(_ball.AbsOrigin.X, _ball.AbsOrigin.Y, _ball.AbsOrigin.Z);
             var a = _ball.AbsRotation;
             _ballStartAng = a == null ? new QAngle(0, 0, 0) : new QAngle(a.X, a.Y, a.Z);
@@ -263,7 +279,14 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
     private void Tick()
     {
         if (!IsFootballMode()) return;
-        if (_ball == null || !_ball.IsValid) { FindEntities(); if (_ball == null) return; }
+        if (_ball == null || !_ball.IsValid)
+        {
+            // Leta inte igenom alla entiteter tio gånger i sekunden på banor utan boll
+            if ((DateTime.UtcNow - _lastSearch).TotalSeconds < 5) return;
+            _lastSearch = DateTime.UtcNow;
+            FindEntities();
+            if (_ball == null) return;
+        }
         var bp = _ball.AbsOrigin;
         if (bp == null) return;
 
