@@ -18,7 +18,7 @@ namespace GamlaSkolanPanelBridge;
 public class GamlaSkolanPanelBridgePlugin : BasePlugin
 {
     public override string ModuleName => "Gamla Skolan Panel Bridge";
-    public override string ModuleVersion => "2.2.0";
+    public override string ModuleVersion => "2.3.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Ger Gamla Skolan-panelen status och spelarkommandon via filer.";
 
@@ -34,7 +34,14 @@ public class GamlaSkolanPanelBridgePlugin : BasePlugin
     //   data/gs_panel/results/*.json  <- svar pa kommandona
     public override void Load(bool hotReload)
     {
-        RegisterListener<Listeners.OnMapStart>(_ => _mapStart = DateTime.UtcNow);
+        // Panelen behöver att servern tickar även när den är tom (status, workshopbyten, kommandon).
+        // Sätts här också ifall server.cfg inte läses (t.ex. sparad i fel teckenkodning).
+        Server.ExecuteCommand("sv_hibernate_when_empty 0");
+        RegisterListener<Listeners.OnMapStart>(_ =>
+        {
+            _mapStart = DateTime.UtcNow;
+            Server.NextFrame(() => Server.ExecuteCommand("sv_hibernate_when_empty 0"));
+        });
         _dir = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "data", "gs_panel"));
         _cmdDir = Path.Combine(_dir, "commands");
         _resDir = Path.Combine(_dir, "results");
