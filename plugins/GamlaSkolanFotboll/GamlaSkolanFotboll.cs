@@ -23,7 +23,7 @@ public class FotbollConfig : BasePluginConfig
     [JsonPropertyName("TouchDistance")] public float TouchDistance { get; set; } = 90f;
     // Ljud som spelas för alla vid mål och vinst (sökväg till en .vsnd i spelet, tomt = inget ljud)
     [JsonPropertyName("GoalSound")] public string GoalSound { get; set; } = "sounds/ui/xp_levelup.vsnd_c";
-    [JsonPropertyName("WinSound")] public string WinSound { get; set; } = "sounds/music/valve_csgo_01/roundmvpanthem_01.vsnd_c";
+    [JsonPropertyName("WinSound")] public string WinSound { get; set; } = "sounds/music/valve_cs2_01/roundmvpanthem_01.vsnd_c";
 }
 
 // Fotbollsläget (CS2 Football-banan, game_type 3):
@@ -35,7 +35,7 @@ public class FotbollConfig : BasePluginConfig
 public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
 {
     public override string ModuleName => "Gamla Skolan Fotboll";
-    public override string ModuleVersion => "1.2.0";
+    public override string ModuleVersion => "1.2.1";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Fotboll: ingen skada, mål, avspark och vinnare";
 
