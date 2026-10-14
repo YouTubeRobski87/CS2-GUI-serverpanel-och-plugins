@@ -36,7 +36,7 @@ public class FotbollConfig : BasePluginConfig
 public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
 {
     public override string ModuleName => "Gamla Skolan Fotboll";
-    public override string ModuleVersion => "1.3.0";
+    public override string ModuleVersion => "1.3.1";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Fotboll: ingen skada, mål, avspark och vinnare";
 
@@ -209,7 +209,7 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
         Server.PrintToChatAll($" {ChatColors.Gold}⚽ MÅL!{ChatColors.Default} {text}");
         Server.PrintToChatAll(ScoreLine());
         var centerWho = who == null ? Team(scoring) : who.PlayerName;
-        ShowCenter($"<font color='#f5c542' class='fontSize-xl'>⚽ MÅL!</font><br>{System.Net.WebUtility.HtmlEncode(centerWho)}<br><font color='#5fa8ff'>CT {_scoreCt}</font> – <font color='#ffd34d'>{_scoreT} T</font>", Config.KickoffDelay);
+        ShowCenter($"<font color='#f5c542' class='fontSize-xl'>MÅL!</font><br>{System.Net.WebUtility.HtmlEncode(centerWho)}<br><font color='#5fa8ff'>CT {_scoreCt}</font> – <font color='#ffd34d'>{_scoreT} T</font>", Config.KickoffDelay);
         Logger.LogInformation("Mål för {Team} ({Who}), CT {Ct} – T {T}", Team(scoring), who?.PlayerName ?? "-", _scoreCt, _scoreT);
 
         if (_scoreCt >= Config.GoalsToWin || _scoreT >= Config.GoalsToWin)
@@ -219,7 +219,7 @@ public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
             {
                 PlayToAll(Config.WinSound);
                 Server.PrintToChatAll($" {ChatColors.Gold}🏆 {TeamColor(winner)}{Team(winner)}{ChatColors.Gold} vinner matchen!{ChatColors.Default}{ScoreLine()}");
-                ShowCenter($"<font color='#f5c542' class='fontSize-xl'>🏆 {Team(winner)} VINNER!</font><br><font color='#5fa8ff'>CT {_scoreCt}</font> – <font color='#ffd34d'>{_scoreT} T</font><br>Ny match börjar strax", 6f);
+                ShowCenter($"<font color='#f5c542' class='fontSize-xl'>{Team(winner)} VINNER!</font><br><font color='#5fa8ff'>CT {_scoreCt}</font> – <font color='#ffd34d'>{_scoreT} T</font><br>Ny match börjar strax", 6f);
             });
             AddTimer(Config.KickoffDelay + 4f, () =>
             {
