@@ -32,7 +32,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     public void OnConfigParsed(LageConfig config) => Config = config;
 
     public override string ModuleName => "Gamla Skolan Lägesomröstning";
-    public override string ModuleVersion => "1.6.1";
+    public override string ModuleVersion => "1.7.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Vote for game mode: !mode / !lage";
 
@@ -45,7 +45,13 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
         ("retakes", "Retakes", "RetakesPlugin"),
         ("deathmatch", "Deathmatch", "Deathmatch"),
         ("zombie", "Zombie", "ZombieMode"),
+        // Egna lägen från panelen: inga egna plugins, de skiljer sig på workshopbanan.
+        ("fotboll", "Fotboll", ""),
+        ("prophunt", "Prop Hunt", ""),
     };
+
+    // Lägen som inte har någon automatisk omröstning vid matchslut (de byts med !mode eller från panelen).
+    private static readonly HashSet<string> NoAutoVote = new() { "fotboll", "prophunt" };
 
     private string P => Config.Prefix
         .Replace("{gold}", $"{ChatColors.Gold}").Replace("{default}", $"{ChatColors.Default}")
@@ -212,9 +218,26 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
 
     private string CurrentMode()
     {
+        // 1) Läget som panelen senast startade servern i (data/gs_panel/current_mode.json)
+        try
+        {
+            var file = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "data", "gs_panel", "current_mode.json"));
+            if (File.Exists(file))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(file).TrimStart('\uFEFF'));
+                if (doc.RootElement.TryGetProperty("mode", out var m) && m.ValueKind == JsonValueKind.String)
+                {
+                    var id = m.GetString() ?? "";
+                    if (Modes.Any(x => x.id == id)) return id;
+                }
+            }
+        }
+        catch (Exception ex) { Logger.LogWarning("Kunde inte läsa aktuellt läge: {Msg}", ex.Message); }
+
+        // 2) Reserv: vilket lägesplugin som är påslaget
         var pluginsDir = Path.GetFullPath(Path.Combine(ModuleDirectory, ".."));
-        foreach (var m in Modes)
-            if (Directory.Exists(Path.Combine(pluginsDir, m.dir))) return m.id;
+        foreach (var mode in Modes)
+            if (mode.dir != "" && Directory.Exists(Path.Combine(pluginsDir, mode.dir))) return mode.id;
         return "";
     }
 
@@ -253,8 +276,8 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
         var humans = Humans();
         if (humans.Count == 0) return;
         _current = CurrentMode();
-        // Egna lägen från panelen (Fotboll, Prop Hunt …) har ingen omröstning – de byts från panelen
-        if (_current == "" && auto) return;
+        // Fotboll och Prop Hunt har ingen automatisk omröstning vid matchslut – bara via !mode
+        if (auto && (_current == "" || NoAutoVote.Contains(_current))) return;
 
         _options = new List<(string, string)>();
         if (_current != "") _options.Add((_current, T($"Fortsätt {NameOf(_current)}", $"Keep {NameOf(_current)}")));
@@ -385,16 +408,26 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
 
     private void CloseMenu(CCSPlayerController player)
     {
-        if (_menus.Remove(player.Slot)) player.PrintToCenterHtml(" ");
+        if (_menus.Remove(player.Slot)) { _centerSent.Remove(player.Slot); player.PrintToCenterHtml(" ", 1); }
     }
 
     private static string Esc(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 
+
+    // Overflow-skydd: skicka bara center-HTML när innehållet ändrats, annars högst en gång per sekund.
+    private readonly Dictionary<int, (string html, DateTime at)> _centerSent = new();
+    private void SendCenter(CCSPlayerController p, string html)
+    {
+        var now = DateTime.UtcNow;
+        if (_centerSent.TryGetValue(p.Slot, out var last) && last.html == html && (now - last.at).TotalSeconds < 1.0) return;
+        _centerSent[p.Slot] = (html, now);
+        p.PrintToCenterHtml(html, 2);
+    }
     private void OnTick()
     {
         if (DateTime.UtcNow < _announceUntil)
         {
-            foreach (var h in Humans()) h.PrintToCenterHtml(_announceHtml);
+            foreach (var h in Humans()) SendCenter(h, _announceHtml);
             return;
         }
         if (!_voting || _menus.Count == 0) return;
@@ -423,7 +456,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
                 sb.Append(i == m.Sel ? $"<font color='#7CFC00'>▶ {text}</font><br>" : $"<font color='#ffffff'>{text}</font><br>");
             }
             sb.Append($"<font color='#9b917f' class='fontSize-s'>{T("W/S: bläddra · E: rösta · R: stäng", "W/S: browse · E: vote · R: close")}</font>");
-            p.PrintToCenterHtml(sb.ToString());
+            SendCenter(p, sb.ToString());
         }
     }
 }

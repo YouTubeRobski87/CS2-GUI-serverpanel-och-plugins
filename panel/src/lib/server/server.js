@@ -179,15 +179,44 @@ function exists(p) {
 	}
 }
 
+// Läget som panelen senast startade servern i. Sparas i serverns datamapp så att
+// lägesomröstningen i spelet (GamlaSkolanLage) också vet vilket läge som körs.
+function startedModeFile() {
+	return path.join(paths().css, 'data', 'gs_panel', 'current_mode.json');
+}
+
+function writeStartedMode(id) {
+	try {
+		const file = startedModeFile();
+		fs.mkdirSync(path.dirname(file), { recursive: true });
+		fs.writeFileSync(file, JSON.stringify({ mode: id, t: new Date().toISOString() }));
+	} catch (e) {
+		log('warn', L(`Kunde inte spara aktuellt läge: ${e.message}`, `Could not save current mode: ${e.message}`));
+	}
+}
+
+function readStartedMode() {
+	try {
+		return JSON.parse(fs.readFileSync(startedModeFile(), 'utf8').replace(/^\uFEFF/, '')).mode || null;
+	} catch {
+		return null;
+	}
+}
+
 export function currentMode() {
 	const P = paths();
 	const modes = getSettings().modes;
+	// Flera lägen kan ha samma plugins på/av (t.ex. Fotboll och Prop Hunt, som bara skiljer
+	// sig på workshopbanan). Då avgör läget som servern senast startades i.
+	const matching = [];
 	for (const [id, m] of Object.entries(modes)) {
 		const allOn = m.enable.every((rel) => exists(path.join(P.css, rel)));
 		const allOff = m.disable.every((rel) => !exists(path.join(P.css, rel)));
-		if (allOn && allOff) return id;
+		if (allOn && allOff) matching.push(id);
 	}
-	return null;
+	const started = readStartedMode();
+	if (started && matching.includes(started)) return started;
+	return matching[0] ?? null;
 }
 
 function stamp() {
@@ -299,6 +328,7 @@ export async function startServer(modeId) {
 	state.lastError = null;
 	try {
 		applyMode(id);
+		writeStartedMode(id);
 		repairMetamod();
 		if (mode.mariadb) {
 			log('server', L('Startar MariaDB…', 'Starting MariaDB…'));
