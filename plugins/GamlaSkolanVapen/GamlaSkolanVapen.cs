@@ -38,7 +38,7 @@ public class Prefs
 public class GamlaSkolanVapenPlugin : BasePlugin, IPluginConfig<VapenConfig>
 {
     public override string ModuleName => "Gamla Skolan Vapenval";
-    public override string ModuleVersion => "1.3.0";
+    public override string ModuleVersion => "1.3.1";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Weapon menu for Retakes: !guns / !vapen";
 
@@ -271,14 +271,14 @@ public class GamlaSkolanVapenPlugin : BasePlugin, IPluginConfig<VapenConfig>
     }
 
 
-    // Overflow-skydd: skicka bara center-HTML när innehållet ändrats, annars högst en gång per sekund.
+    // Center-HTML skickas varje tick, men bara till spelare som har en meny eller ruta öppen.
     private readonly Dictionary<int, (string html, DateTime at)> _centerSent = new();
     private void SendCenter(CCSPlayerController p, string html)
     {
         var now = DateTime.UtcNow;
-        if (_centerSent.TryGetValue(p.Slot, out var last) && last.html == html && (now - last.at).TotalSeconds < 1.0) return;
+        // CS2 visar center-HTML bara en kort stund, så rutan måste skickas varje tick medan den ska synas
         _centerSent[p.Slot] = (html, now);
-        p.PrintToCenterHtml(html, 2);
+        p.PrintToCenterHtml(html);
     }
     private void OnTick()
     {

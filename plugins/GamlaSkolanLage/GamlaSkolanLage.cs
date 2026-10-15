@@ -32,7 +32,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     public void OnConfigParsed(LageConfig config) => Config = config;
 
     public override string ModuleName => "Gamla Skolan Lägesomröstning";
-    public override string ModuleVersion => "1.7.0";
+    public override string ModuleVersion => "1.7.1";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Vote for game mode: !mode / !lage";
 
@@ -414,14 +414,14 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     private static string Esc(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 
 
-    // Overflow-skydd: skicka bara center-HTML när innehållet ändrats, annars högst en gång per sekund.
+    // Center-HTML skickas varje tick, men bara till spelare som har en meny eller ruta öppen.
     private readonly Dictionary<int, (string html, DateTime at)> _centerSent = new();
     private void SendCenter(CCSPlayerController p, string html)
     {
         var now = DateTime.UtcNow;
-        if (_centerSent.TryGetValue(p.Slot, out var last) && last.html == html && (now - last.at).TotalSeconds < 1.0) return;
+        // CS2 visar center-HTML bara en kort stund, så rutan måste skickas varje tick medan den ska synas
         _centerSent[p.Slot] = (html, now);
-        p.PrintToCenterHtml(html, 2);
+        p.PrintToCenterHtml(html);
     }
     private void OnTick()
     {

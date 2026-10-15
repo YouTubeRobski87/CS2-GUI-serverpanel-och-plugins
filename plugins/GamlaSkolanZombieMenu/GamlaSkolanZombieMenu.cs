@@ -52,7 +52,7 @@ public class ZombieMenuConfig : BasePluginConfig
 public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuConfig>
 {
     public override string ModuleName => "Gamla Skolan Zombie Menu";
-    public override string ModuleVersion => "1.9.3";
+    public override string ModuleVersion => "1.9.4";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Admin menu for cs2-zombie-mode settings (!zm) and no warmup in Zombie mode";
 
@@ -473,14 +473,14 @@ public class GamlaSkolanZombieMenuPlugin : BasePlugin, IPluginConfig<ZombieMenuC
     }
 
 
-    // Overflow-skydd: skicka bara center-HTML när innehållet ändrats, annars högst en gång per sekund.
+    // Center-HTML skickas varje tick, men bara till spelare som har en meny eller ruta öppen.
     private readonly Dictionary<int, (string html, DateTime at)> _centerSent = new();
     private void SendCenter(CCSPlayerController p, string html)
     {
         var now = DateTime.UtcNow;
-        if (_centerSent.TryGetValue(p.Slot, out var last) && last.html == html && (now - last.at).TotalSeconds < 1.0) return;
+        // CS2 visar center-HTML bara en kort stund, så rutan måste skickas varje tick medan den ska synas
         _centerSent[p.Slot] = (html, now);
-        p.PrintToCenterHtml(html, 2);
+        p.PrintToCenterHtml(html);
     }
     private void ShowMvp()
     {
