@@ -9,6 +9,7 @@
 	import Settings from '$lib/components/Settings.svelte';
 	import Update from '$lib/components/Update.svelte';
 	import Forest from '$lib/components/Forest.svelte';
+	import Palworld from '$lib/components/Palworld.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { t, i18n, setLang } from '$lib/i18n.svelte.js';
 
@@ -22,8 +23,11 @@
 		{ id: 'update', label: t('Uppdatering', 'Update'), icon: 'download' }
 	]);
 	// Andra spel än CS2 – egen grupp i menyn
-	let otherTabs = $derived([{ id: 'forest', label: 'The Forest', icon: 'tree' }]);
-	const TAB_IDS = ['overview', 'console', 'players', 'leaderboard', 'plugins', 'settings', 'update', 'forest'];
+	let otherTabs = $derived([
+		{ id: 'forest', label: 'The Forest', icon: 'tree' },
+		{ id: 'palworld', label: 'Palworld', icon: 'paw' }
+	]);
+	const TAB_IDS = ['overview', 'console', 'players', 'leaderboard', 'plugins', 'settings', 'update', 'forest', 'palworld'];
 
 	let tab = $state('overview');
 	let st = $state(null);
@@ -236,6 +240,8 @@
 				<Update {st} {update} {ctx} />
 			{:else if tab === 'forest'}
 				<Forest {ctx} />
+			{:else if tab === 'palworld'}
+				<Palworld {ctx} />
 			{/if}
 		</div>
 	</main>

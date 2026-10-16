@@ -12,6 +12,12 @@ import {
 	setChatPrefix, syncPluginLanguage, setupCheck, readZombieConfig, writeZombieConfig
 } from '$lib/server/game.js';
 
+import {
+	palStatus, palStart, palStop, palKill, palRestart, palSave, palAnnounce, palPlayer,
+	palSettings, palSaveSettings, palRawIni, palSaveRawIni, palResetSetting,
+	palBackups, palBackup, palRestore, palDeleteBackup, palMods, palToggleMod, palLog,
+	palCheckUpdate, palUpdate, palUpdateJob, palSavePanelCfg, palTestWebhook
+} from '$lib/server/palworld.js';
 import { forestStatus, forestStart, forestStop, forestRestart, forestSaveConfig } from '$lib/server/forest.js';
 
 const fail = (e, status = 400) => json({ ok: false, error: e?.message || String(e) }, { status });
@@ -25,6 +31,22 @@ export async function GET({ params, url }) {
 				return json(await liveStatus());
 			case 'forest':
 				return json(await forestStatus());
+			case 'palworld':
+				return json(await palStatus());
+			case 'palworld/settings':
+				return json({ ok: true, ...palSettings() });
+			case 'palworld/ini':
+				return json(palRawIni());
+			case 'palworld/backups':
+				return json(palBackups());
+			case 'palworld/mods':
+				return json(palMods());
+			case 'palworld/log':
+				return json(palLog(url.searchParams.get('source'), Number(url.searchParams.get('offset') ?? -1)));
+			case 'palworld/update/check':
+				return json({ ok: true, ...(await palCheckUpdate(url.searchParams.get('force') === '1')) });
+			case 'palworld/update/job':
+				return json(palUpdateJob());
 			case 'console':
 				return json(readConsole(url.searchParams.get('source') || 'server', url.searchParams.get('file'), Number(url.searchParams.get('offset') ?? -1)));
 			case 'events':
@@ -72,6 +94,40 @@ export async function POST({ params, request }) {
 	try { body = await request.json(); } catch { /* tom body */ }
 	try {
 		switch (params.path) {
+			case 'palworld/start':
+				return json(await palStart());
+			case 'palworld/stop':
+				return json(await palStop(body));
+			case 'palworld/kill':
+				return json(await palKill());
+			case 'palworld/restart':
+				return json(await palRestart(body));
+			case 'palworld/save':
+				return json(await palSave());
+			case 'palworld/announce':
+				return json(await palAnnounce(body.message));
+			case 'palworld/player':
+				return json(await palPlayer(body));
+			case 'palworld/settings':
+				return json(palSaveSettings(body.values || {}));
+			case 'palworld/settings/reset':
+				return json(palResetSetting(body.key));
+			case 'palworld/ini':
+				return json(palSaveRawIni(body.text));
+			case 'palworld/backup':
+				return json(await palBackup(body.label));
+			case 'palworld/backup/restore':
+				return json(await palRestore(body.name));
+			case 'palworld/backup/delete':
+				return json(palDeleteBackup(body.name));
+			case 'palworld/mods':
+				return json(palToggleMod(body));
+			case 'palworld/update':
+				return json(await palUpdate({ validate: !!body.validate }));
+			case 'palworld/panel':
+				return json(palSavePanelCfg(body));
+			case 'palworld/webhook/test':
+				return json(await palTestWebhook());
 			case 'forest/start':
 				return json(await forestStart());
 			case 'forest/stop':
