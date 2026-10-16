@@ -133,8 +133,39 @@ function readIni() {
 
 function writeIni(p) {
 	const P = palPaths();
+	const text = serializeIni(p);
 	if (fs.existsSync(P.ini)) fs.copyFileSync(P.ini, `${P.ini}.bak`);
-	fs.writeFileSync(P.ini, serializeIni(p));
+	fs.writeFileSync(P.ini, text);
+	// Palworld skriver över PalWorldSettings.ini med sina gamla värden när servern stängs.
+	// Sparas något medan den är igång läggs det tillbaka efter att den har stängts (se applyPending).
+	if (state.running) {
+		try {
+			fs.mkdirSync(path.dirname(PENDING_FILE), { recursive: true });
+			fs.writeFileSync(PENDING_FILE, text);
+		} catch {
+			/* */
+		}
+	}
+}
+
+const PENDING_FILE = path.join(process.env.GSP_DATA || path.resolve(process.cwd(), 'panel-data'), 'palworld-pending.ini');
+
+// Lägger tillbaka inställningar som sparades medan servern var igång. Körs när servern har stängts och före start.
+function applyPending() {
+	if (!fs.existsSync(PENDING_FILE)) return false;
+	try {
+		const text = fs.readFileSync(PENDING_FILE, 'utf8');
+		parseIni(text); // trasig fil ska aldrig skrivas
+		const P = palPaths();
+		if (fs.existsSync(P.ini)) fs.copyFileSync(P.ini, `${P.ini}.bak`);
+		fs.writeFileSync(P.ini, text);
+		fs.rmSync(PENDING_FILE, { force: true });
+		log('config', L('Palworld: lade tillbaka inställningarna som sparades medan servern var igång', 'Palworld: re-applied settings saved while the server was running'));
+		return true;
+	} catch (e) {
+		log('error', `Palworld: ${e.message}`);
+		return false;
+	}
 }
 
 const unq = (v) => (/^".*"$/s.test(v) ? v.slice(1, -1) : v);
@@ -373,7 +404,9 @@ async function probe(force = false) {
 	} catch {
 		/* */
 	}
+	const was = state.running;
 	state.running = !!proc;
+	if (was && !state.running) applyPending();
 	state.pid = proc?.pid ?? null;
 	state.startedAt = proc?.created ?? null;
 	state.memBytes = proc?.ws ?? 0;
@@ -438,6 +471,7 @@ export async function palStart({ reason } = {}) {
 	if (state.running) throw new Error(L('Palworld-servern körs redan.', 'The Palworld server is already running.'));
 	if (state.busy) throw new Error(L('Vänta, panelen håller på med Palworld just nu.', 'Wait, the panel is busy with Palworld right now.'));
 	if (!fs.existsSync(P.exe)) throw new Error(L(`Hittar inte ${P.exe}`, `Cannot find ${P.exe}`));
+	applyPending();
 	ensureApi();
 	const child = spawn(P.exe, launchArgs(), { cwd: P.root, detached: true, stdio: 'ignore', windowsHide: false });
 	child.unref();
@@ -1189,6 +1223,7 @@ export function startPalworldMonitor() {
 	(async () => {
 		await probe(true);
 		state.expect = state.running;
+		if (!state.running) applyPending();
 		if (state.running) await refreshGame();
 		else if (palCfg().autoStart && fs.existsSync(palPaths().exe)) await palStart({ reason: L('Palworld: startar med panelen…', 'Palworld: starting with the panel…') }).catch((e) => log('error', e.message));
 		// Slå på REST API:t direkt så att det gäller nästa gång servern startar, hur den än startas.
