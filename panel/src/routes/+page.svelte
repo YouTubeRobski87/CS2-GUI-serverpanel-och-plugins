@@ -8,6 +8,7 @@
 	import Plugins from '$lib/components/Plugins.svelte';
 	import Settings from '$lib/components/Settings.svelte';
 	import Update from '$lib/components/Update.svelte';
+	import Forest from '$lib/components/Forest.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { t, i18n, setLang } from '$lib/i18n.svelte.js';
 
@@ -20,7 +21,9 @@
 		{ id: 'settings', label: t('Inställningar', 'Settings'), icon: 'sliders' },
 		{ id: 'update', label: t('Uppdatering', 'Update'), icon: 'download' }
 	]);
-	const TAB_IDS = ['overview', 'console', 'players', 'leaderboard', 'plugins', 'settings', 'update'];
+	// Andra spel än CS2 – egen grupp i menyn
+	let otherTabs = $derived([{ id: 'forest', label: 'The Forest', icon: 'tree' }]);
+	const TAB_IDS = ['overview', 'console', 'players', 'leaderboard', 'plugins', 'settings', 'update', 'forest'];
 
 	let tab = $state('overview');
 	let st = $state(null);
@@ -148,6 +151,18 @@
 					{/if}
 				</button>
 			{/each}
+			<div class="label !text-[10px] !tracking-[0.2em] px-3 pt-5 pb-1">{t('Andra spel', 'Other games')}</div>
+			{#each otherTabs as t}
+				<button
+					onclick={() => go(t.id)}
+					class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] font-medium transition-colors {tab === t.id
+						? 'bg-amber/10 text-amber-2 border border-amber/30'
+						: 'text-muted hover:text-text hover:bg-panel-2 border border-transparent'}"
+				>
+					<Icon name={t.icon} class="size-[18px]" />
+					{t.label}
+				</button>
+			{/each}
 		</nav>
 		<div class="p-4 border-t border-line text-xs text-dim space-y-1">
 			<div>Patch <span class="num text-muted">{st?.version?.patch ?? '–'}</span></div>
@@ -177,6 +192,9 @@
 			<!-- mobilmeny -->
 			<select class="input md:hidden !w-auto ml-auto" value={tab} onchange={(e) => go(e.currentTarget.value)}>
 				{#each tabs as t}<option value={t.id}>{t.label}</option>{/each}
+				<optgroup label={t('Andra spel', 'Other games')}>
+					{#each otherTabs as t}<option value={t.id}>{t.label}</option>{/each}
+				</optgroup>
 			</select>
 			{#if update?.upToDate === false}
 				<button class="ml-auto hidden md:inline-flex btn btn-sm !border-warn/60 !text-warn" onclick={() => go('update')}>
@@ -216,6 +234,8 @@
 				<Settings {st} {ctx} />
 			{:else if tab === 'update'}
 				<Update {st} {update} {ctx} />
+			{:else if tab === 'forest'}
+				<Forest {ctx} />
 			{/if}
 		</div>
 	</main>

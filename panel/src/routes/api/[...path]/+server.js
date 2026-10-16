@@ -12,6 +12,8 @@ import {
 	setChatPrefix, syncPluginLanguage, setupCheck, readZombieConfig, writeZombieConfig
 } from '$lib/server/game.js';
 
+import { forestStatus, forestStart, forestStop, forestRestart, forestSaveConfig } from '$lib/server/forest.js';
+
 const fail = (e, status = 400) => json({ ok: false, error: e?.message || String(e) }, { status });
 
 export async function GET({ params, url }) {
@@ -21,6 +23,8 @@ export async function GET({ params, url }) {
 				return json({ ok: true, ...getState(), bridge: bridgeAlive(), version: installedVersion(), lang: getSettings().lang, setup: setupCheck() });
 			case 'live':
 				return json(await liveStatus());
+			case 'forest':
+				return json(await forestStatus());
 			case 'console':
 				return json(readConsole(url.searchParams.get('source') || 'server', url.searchParams.get('file'), Number(url.searchParams.get('offset') ?? -1)));
 			case 'events':
@@ -68,6 +72,14 @@ export async function POST({ params, request }) {
 	try { body = await request.json(); } catch { /* tom body */ }
 	try {
 		switch (params.path) {
+			case 'forest/start':
+				return json(await forestStart());
+			case 'forest/stop':
+				return json(await forestStop());
+			case 'forest/restart':
+				return json(await forestRestart());
+			case 'forest/config':
+				return json(forestSaveConfig(body.values || {}));
 			case 'start':
 				startServer(body.mode, body.map).catch(() => {});
 				return json({ ok: true });
