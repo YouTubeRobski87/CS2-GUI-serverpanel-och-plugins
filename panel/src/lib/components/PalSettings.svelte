@@ -159,11 +159,11 @@
 							{:else if f.type === 'list'}
 								<input class="input mt-1 mono" value={(form[f.key] || []).join(',')} onchange={(e) => (form[f.key] = e.currentTarget.value.split(',').map((x) => x.trim()).filter(Boolean))} />
 							{:else if f.secret}
-								<input class="input mt-1" type="password" autocomplete="off" placeholder={f.isSet ? t('Satt – fyll i för att byta', 'Set – fill in to change') : t('Inte satt', 'Not set')} bind:value={form[f.key]} />
+								<input class="input mt-1" type="text" autocomplete="off" data-1p-ignore data-lpignore="true" style="-webkit-text-security: disc" placeholder={f.isSet ? t('Satt – fyll i för att byta', 'Set – fill in to change') : t('Inte satt', 'Not set')} bind:value={form[f.key]} />
 							{:else if f.type === 'bool'}
 								<!-- kryssrutan sitter i rubriken -->
 							{:else}
-								<input class="input mt-1 {f.type === 'raw' ? 'mono' : ''}" type="text" bind:value={form[f.key]} />
+								<input class="input mt-1 {f.type === 'raw' ? 'mono' : ''}" type="text" autocomplete="off" data-1p-ignore data-lpignore="true" name="pal-{f.key}" bind:value={form[f.key]} />
 							{/if}
 							{#if f.hint}<div class="text-[11px] text-dim mt-1">{f.hint}</div>{/if}
 							<div class="text-[10px] text-dim/70 mono mt-0.5 truncate">{f.key}</div>

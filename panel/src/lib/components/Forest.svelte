@@ -149,7 +149,7 @@
 								{:else if f.type === 'number'}
 									<input class="input mt-1" type="number" min={f.min} max={f.max} bind:value={form[f.key]} />
 								{:else if f.type === 'secret'}
-									<input class="input mt-1" type="password" autocomplete="off" placeholder={fs.config[f.key] ? t('Token finns – fyll i för att byta', 'Token set – fill in to replace') : t('Ingen token – klistra in här', 'No token – paste here')} bind:value={form[f.key]} />
+									<input class="input mt-1" type="text" autocomplete="off" data-1p-ignore data-lpignore="true" style="-webkit-text-security: disc" placeholder={fs.config[f.key] ? t('Token finns – fyll i för att byta', 'Token set – fill in to replace') : t('Ingen token – klistra in här', 'No token – paste here')} bind:value={form[f.key]} />
 								{:else}
 									<input class="input mt-1" type="text" maxlength="64" bind:value={form[f.key]} />
 								{/if}

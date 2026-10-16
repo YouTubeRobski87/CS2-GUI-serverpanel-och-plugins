@@ -218,7 +218,7 @@
 					</div>
 				{/if}
 				<div class="flex flex-col sm:flex-row gap-3">
-					<input class="input mono flex-1" type="password" autocomplete="off" spellcheck="false" bind:value={gsltInput} placeholder={panel.gslt ? t('Klistra in en ny token för att byta', 'Paste a new token to replace it') : t('Klistra in din token här', 'Paste your token here')} />
+					<input class="input mono flex-1" type="text" autocomplete="off" data-1p-ignore data-lpignore="true" style="-webkit-text-security: disc" spellcheck="false" bind:value={gsltInput} placeholder={panel.gslt ? t('Klistra in en ny token för att byta', 'Paste a new token to replace it') : t('Klistra in din token här', 'Paste your token here')} />
 					<button class="btn btn-primary" disabled={saving === 'gslt' || !gsltInput.trim()} onclick={() => saveGslt(false)}><Icon name="check" class="size-4" /> {t('Spara token', 'Save token')}</button>
 				</div>
 				<p class="text-xs text-dim">
