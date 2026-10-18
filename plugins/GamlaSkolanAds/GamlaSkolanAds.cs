@@ -16,7 +16,7 @@ public class AdsConfig : BasePluginConfig
     {
         "For new weapons type {green}!gun{default} - or just type the weapon name, e.g. {green}ak{default} or {green}awp{default}",
         "Check your rank with {green}!rank{default} and the leaderboard with {green}!top{default}",
-        "First to {green}100 kills{default} wins the map!",
+        "First to {green}50 kills{default} wins the map!",
     };
 }
 
