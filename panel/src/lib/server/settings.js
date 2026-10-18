@@ -29,7 +29,7 @@ export const DEFAULTS = {
 		},
 		deathmatch: {
 			name: 'Deathmatch',
-			description: 'Free for all, first to 100 kills wins the map. MVP celebration and map rotation.',
+			description: 'Free for all, first to 50 kills wins the map. MVP celebration and map rotation.',
 			args: '-dedicated -console -usercon -port {port} +game_type 1 +game_mode 2 +mapgroup mg_active +map de_dust2 +sv_setsteamaccount {gslt} +exec server.cfg',
 			enable: ['plugins/Deathmatch', 'shared/DeathmatchAPI', 'plugins/GamlaSkolanMvp'],
 			disable: ['plugins/K4-Arenas', 'plugins/K4-Arenas-Bots', 'plugins/RetakesPlugin', 'plugins/GamlaSkolanVapen', 'plugins/InstadefusePlugin', 'plugins/ClutchAnnouncePlugin', 'plugins/ZombieMode', 'plugins/ZombieMode.Money', 'plugins/ZombieMode.Magazines', 'plugins/ZombieMode.WeaponDamage', 'plugins/GamlaSkolanZombieMenu'],

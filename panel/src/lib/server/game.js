@@ -95,7 +95,7 @@ export const EDITABLE = {
 	},
 	GamlaSkolanMvp: {
 		title: ['MVP & killgräns', 'MVP & kill limit'],
-		defaults: { KillLimit: 100, CelebrationSeconds: 10, MapCycleFile: 'mapcycle_dm.txt', Prefix: '{green}[Server]{default}', Language: 'en', ConfigVersion: 1 }
+		defaults: { KillLimit: 50, CelebrationSeconds: 10, MapCycleFile: 'mapcycle_dm.txt', Prefix: '{green}[Server]{default}', Language: 'en', ConfigVersion: 1 }
 	},
 	GamlaSkolanRank: {
 		title: ['Rank', 'Rank'],

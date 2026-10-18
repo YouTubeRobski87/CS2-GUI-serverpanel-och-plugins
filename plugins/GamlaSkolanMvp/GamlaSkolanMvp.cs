@@ -13,7 +13,7 @@ namespace GamlaSkolanMvp;
 
 public class MvpConfig : BasePluginConfig
 {
-    [JsonPropertyName("KillLimit")] public int KillLimit { get; set; } = 100;
+    [JsonPropertyName("KillLimit")] public int KillLimit { get; set; } = 50;
     [JsonPropertyName("CelebrationSeconds")] public int CelebrationSeconds { get; set; } = 10;
     [JsonPropertyName("MapCycleFile")] public string MapCycleFile { get; set; } = "mapcycle_dm.txt";
     [JsonPropertyName("Prefix")] public string Prefix { get; set; } = "{green}[Server]{default}";
