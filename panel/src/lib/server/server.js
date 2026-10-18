@@ -338,6 +338,16 @@ export async function startServer(modeId, startMap = '') {
 			if (!ok) log('warn', L('MariaDB startade inte – K4-Arenas kan inte spara vapenval.', 'MariaDB did not start – K4-Arenas cannot save weapon choices.'));
 		}
 		let args = mode.args.replace('{port}', String(s.port)).replace('{gslt}', gslt);
+		// GSLT-token måste sättas innan servern laddar en bana och loggar in hos Steam,
+		// annars: "Game server already logged into steam". Flytta den först i raden.
+		{
+			const m = args.match(/\+sv_setsteamaccount\s+\S+/);
+			if (m) {
+				const rest = args.replace(m[0], '').replace(/\s{2,}/g, ' ').trim();
+				const i = rest.search(/(^|\s)\+/); // före första +kommandot, efter -flaggorna
+				args = i < 0 ? `${rest} ${m[0]}` : `${rest.slice(0, i)} ${m[0]} ${rest.slice(i).trim()}`.replace(/\s{2,}/g, ' ').trim();
+			}
+		}
 		// Vald startkarta från panelen ersätter lägets standardkarta.
 		const pick = String(startMap || '').trim();
 		if (pick && (/^\d{6,12}$/.test(pick) || /^[\w\-]+$/.test(pick))) {
