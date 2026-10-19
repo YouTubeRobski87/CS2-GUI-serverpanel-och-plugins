@@ -30,7 +30,7 @@ public class FotbollConfig : BasePluginConfig
     [JsonPropertyName("FootballCommands")] public List<string> FootballCommands { get; set; } = new()
     {
         "mp_autoteambalance 1", "mp_limitteams 1", "mp_startmoney 0", "mp_buytime 0", "mp_freezetime 1",
-        "mp_roundtime 60", "mp_warmuptime 0", "mp_timelimit 0", "mp_forcecamera 0", "mp_solid_teammates 1", "mp_friendlyfire 0",
+        "mp_roundtime 60", "mp_roundtime_defuse 60", "mp_roundtime_hostage 60", "mp_team_intro_time 0", "mp_warmuptime 0", "mp_timelimit 0", "mp_forcecamera 0", "mp_solid_teammates 1", "mp_friendlyfire 0",
         "mp_spawnprotectiontime 0", "mp_round_restart_delay 5", "mp_ignore_round_win_conditions 1",
         "mp_match_end_restart 1", "mp_match_end_changelevel 0", "mp_endmatch_votenextmap 0",
         "mp_ct_default_secondary \"\"", "mp_t_default_secondary \"\"", "mp_ct_default_primary \"\"", "mp_t_default_primary \"\"",
@@ -50,7 +50,7 @@ public class FotbollConfig : BasePluginConfig
 public class GamlaSkolanFotbollPlugin : BasePlugin, IPluginConfig<FotbollConfig>
 {
     public override string ModuleName => "Gamla Skolan Fotboll";
-    public override string ModuleVersion => "1.6.1";
+    public override string ModuleVersion => "1.6.2";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Fotboll: ingen skada, mål, avspark och vinnare";
 
