@@ -32,7 +32,7 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
     public void OnConfigParsed(LageConfig config) => Config = config;
 
     public override string ModuleName => "Gamla Skolan Lägesomröstning";
-    public override string ModuleVersion => "1.7.1";
+    public override string ModuleVersion => "1.8.0";
     public override string ModuleAuthor => "Gamla Skolan";
     public override string ModuleDescription => "Vote for game mode: !mode / !lage";
 
@@ -48,10 +48,11 @@ public class GamlaSkolanLagePlugin : BasePlugin, IPluginConfig<LageConfig>
         // Egna lägen från panelen: inga egna plugins, de skiljer sig på workshopbanan.
         ("fotboll", "Fotboll", ""),
         ("prophunt", "Prop Hunt", ""),
+        ("surf", "Surf", "SharpTimer"),
     };
 
     // Lägen som inte har någon automatisk omröstning vid matchslut (de byts med !mode eller från panelen).
-    private static readonly HashSet<string> NoAutoVote = new() { "fotboll", "prophunt" };
+    private static readonly HashSet<string> NoAutoVote = new() { "fotboll", "prophunt", "surf" };
 
     private string P => Config.Prefix
         .Replace("{gold}", $"{ChatColors.Gold}").Replace("{default}", $"{ChatColors.Default}")
