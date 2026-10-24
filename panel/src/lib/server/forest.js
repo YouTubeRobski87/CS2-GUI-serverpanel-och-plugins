@@ -140,8 +140,11 @@ export async function forestStart() {
 	const P = forestPaths();
 	if (!fs.existsSync(P.exe)) throw new Error(L(`Hittar inte ${P.exe} – installera servern först.`, `Cannot find ${P.exe} – install the server first.`));
 	if (await processInfo()) throw new Error(L('The Forest-servern körs redan.', 'The Forest server is already running.'));
-	const args = `-batchmode -nographics -nosteamclient -configfilepath "${P.config}" -savefolderpath "${P.saves}"`;
-	const child = spawn('cmd.exe', [`/c start "The Forest - Gamla Skolan" /D "${P.root}" ${EXE} ${args}`], {
+	// Loggen skrivs till fil i stället för konsolfönstret. Servern spammar annars
+	// "RenderTexture.Create failed" (ofarligt i -nographics) i stor mängd. Filen skrivs över vid varje start.
+	const logFile = path.join(P.root, 'server.log');
+	const args = `-batchmode -nographics -nosteamclient -logFile "${logFile}" -configfilepath "${P.config}" -savefolderpath "${P.saves}"`;
+	const child = spawn('cmd.exe', [`/c start "The Forest - Gamla Skolan" /MIN /D "${P.root}" ${EXE} ${args}`], {
 		windowsVerbatimArguments: true,
 		detached: true,
 		stdio: 'ignore',
