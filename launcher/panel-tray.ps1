@@ -31,6 +31,15 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 function Test-PanelRunning {
+    # Fråga panelen direkt. Get-NetTCPConnection ensam missar ibland en panel som redan kör,
+    # och då startades en andra kopia som inte fick porten -> "Panelen startade inte".
+    try {
+        $client = New-Object System.Net.Sockets.TcpClient
+        $iar = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
+        $ok = $iar.AsyncWaitHandle.WaitOne(700) -and $client.Connected
+        $client.Close()
+        if ($ok) { return $true }
+    } catch {}
     return [bool](Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
 }
 
@@ -65,10 +74,11 @@ function Start-Panel {
     $psi.EnvironmentVariables['ORIGIN'] = $Url
     Log "Startar node: $node"
     [System.Diagnostics.Process]::Start($psi) | Out-Null
-    for ($i = 0; $i -lt 40; $i++) {
+    for ($i = 0; $i -lt 80; $i++) {
         Start-Sleep -Milliseconds 250
         if (Test-PanelRunning) { return $true }
     }
+    Log 'Panelen svarade inte inom 20 s'
     [System.Windows.Forms.MessageBox]::Show((T "Panelen startade inte. Se loggen:`n$LogFile" "The panel did not start. See the log:`n$LogFile"), "Gamla Skolan Panel", 'OK', 'Error') | Out-Null
     return $false
 }
