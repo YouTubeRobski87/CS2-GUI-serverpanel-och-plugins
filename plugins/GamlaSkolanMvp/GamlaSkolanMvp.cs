@@ -6,6 +6,7 @@ using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Memory;
 using CounterStrikeSharp.API.Modules.Utils;
+using CounterStrikeSharp.API.Modules.Entities.Constants;
 using CounterStrikeSharp.API.Modules.Timers;
 using Microsoft.Extensions.Logging;
 
@@ -25,9 +26,9 @@ public class MvpConfig : BasePluginConfig
 public class GamlaSkolanMvpPlugin : BasePlugin, IPluginConfig<MvpConfig>
 {
     public override string ModuleName => "Gamla Skolan MVP";
-    public override string ModuleVersion => "1.3.0";
+    public override string ModuleVersion => "1.4.0";
     public override string ModuleAuthor => "Gamla Skolan";
-    public override string ModuleDescription => "First to X kills in deathmatch is MVP, then the map changes.";
+    public override string ModuleDescription => "First to X kills in deathmatch is MVP, then the match ends with the normal results screen.";
 
     public MvpConfig Config { get; set; } = new();
     private bool Sv => string.Equals(Config.Language, "sv", StringComparison.OrdinalIgnoreCase);
@@ -39,6 +40,7 @@ public class GamlaSkolanMvpPlugin : BasePlugin, IPluginConfig<MvpConfig>
 
     private readonly Dictionary<ulong, int> _kills = new();
     private bool _finished;
+    private bool _matchEndShown;
 
     public void OnConfigParsed(MvpConfig config)
     {
@@ -49,7 +51,21 @@ public class GamlaSkolanMvpPlugin : BasePlugin, IPluginConfig<MvpConfig>
 
     public override void Load(bool hotReload)
     {
-        RegisterListener<Listeners.OnMapStart>(_ => { _kills.Clear(); _finished = false; });
+        RegisterListener<Listeners.OnMapStart>(_ =>
+        {
+            _kills.Clear();
+            _finished = false;
+            _matchEndShown = false;
+            // Matchslutet sätter mp_maxrounds 1 – återställ lägets inställningar på nya kartan
+            AddTimer(1.0f, () => { if (IsDeathmatch()) Server.ExecuteCommand("exec gamla_dm_classic.cfg"); }, TimerFlags.STOP_ON_MAPCHANGE);
+        });
+    }
+
+    [GameEventHandler]
+    public HookResult OnMatchEnd(EventCsWinPanelMatch e, GameEventInfo info)
+    {
+        _matchEndShown = true;
+        return HookResult.Continue;
     }
 
     private static bool IsDeathmatch()
@@ -103,37 +119,31 @@ public class GamlaSkolanMvpPlugin : BasePlugin, IPluginConfig<MvpConfig>
         catch (Exception ex) { Logger.LogWarning(ex, "Kunde inte satta MVP-stjarna"); }
 
         string nextText = next != null ? T($"Nästa karta: {next}", $"Next map: {next}") : T("Ny karta laddas", "New map loading");
-        string Chat(int secs) => T($" \x10★ MVP ★\x01 \x04{name}\x01 var först till \x04{Config.KillLimit} kills\x01! {nextText} om {secs} sekunder.",
-                                   $" \x10★ MVP ★\x01 \x04{name}\x01 was first to \x04{Config.KillLimit} kills\x01! {nextText} in {secs} seconds.");
-        string chat = Chat(Config.CelebrationSeconds);
-        Server.PrintToChatAll(chat);
+        Server.PrintToChatAll(T($" \x10★ MVP ★\x01 \x04{name}\x01 var först till \x04{Config.KillLimit} kills\x01! {nextText} efter matchen.",
+                                $" \x10★ MVP ★\x01 \x04{name}\x01 was first to \x04{Config.KillLimit} kills\x01! {nextText} after the match."));
+        Logger.LogInformation("MVP {Name} nadde {Limit} kills pa {Map}, avslutar matchen (nasta: {Next})", name, Config.KillLimit, current, next ?? "(samma karta)");
 
-        // Frys alla och gör dem odödliga under firandet, så att ingen spelar vidare.
-        FreezeAll();
-
-        DateTime end = DateTime.UtcNow.AddSeconds(Config.CelebrationSeconds);
-        int lastChatSecond = Config.CelebrationSeconds;
-        AddTimer(0.25f, () =>
+        // Avsluta matchen på riktigt: CS2 visar då matchresultatet med SEGER och spelarkorten,
+        // och GamlaSkolanLage startar omröstningen om spelläge. Vanliga banor väljs via nextlevel.
+        if (next != null && !next.All(char.IsDigit)) Server.ExecuteCommand($"nextlevel {next}");
+        Server.ExecuteCommand("mp_match_end_changelevel 1");
+        Server.ExecuteCommand("mp_endmatch_votenextmap 0");
+        Server.ExecuteCommand("mp_ignore_round_win_conditions 0");
+        Server.ExecuteCommand("mp_maxrounds 1");
+        FreezeAll(); // ingen spelar vidare under de sekunder det tar innan matchresultatet visas
+        var reason = winner.Team == CsTeam.CounterTerrorist ? RoundEndReason.CTsWin : RoundEndReason.TerroristsWin;
+        try
         {
-            int left = Math.Max(0, (int)Math.Ceiling((end - DateTime.UtcNow).TotalSeconds));
-            FreezeAll(); // fångar även spelare som respawnar under firandet
-            string html =
-                "<font class='fontSize-xl' color='#FFD700'>★ MVP ★</font><br>" +
-                $"<font class='fontSize-l' color='#FFFFFF'>{System.Net.WebUtility.HtmlEncode(name)}</font><br>" +
-                $"<font class='fontSize-m' color='#A0FFA0'>{T("Först till", "First to")} {Config.KillLimit} kills!</font><br>" +
-                $"<font class='fontSize-s' color='#CCCCCC'>{System.Net.WebUtility.HtmlEncode(nextText)} {T("om", "in")} {left} s</font>";
-            foreach (var p in Utilities.GetPlayers().Where(IsHuman))
-                p.PrintToCenterHtml(html, 1);
-            if (left > 0 && left % 4 == 0 && left != lastChatSecond)
-            {
-                lastChatSecond = left;
-                Server.PrintToChatAll(Chat(left));
-            }
-        }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+            var rules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+            rules?.TerminateRound(3.0f, reason);
+        }
+        catch (Exception ex) { Logger.LogWarning(ex, "Kunde inte avsluta rundan"); }
 
-        AddTimer(Config.CelebrationSeconds + 0.5f, () =>
+        // Reserv: om matchresultatet inte visas inom 12 s byts kartan som förut.
+        AddTimer(12f, () =>
         {
-            Logger.LogInformation("MVP {Name} nadde {Limit} kills pa {Map}, byter till {Next}", name, Config.KillLimit, current, next ?? "(samma karta)");
+            if (_matchEndShown) return;
+            Logger.LogWarning("Matchresultatet visades inte - byter karta direkt");
             Server.ExecuteCommand(MapCommand(next ?? current));
         }, TimerFlags.STOP_ON_MAPCHANGE);
     }
